@@ -1,18 +1,67 @@
-import torch
 import pickle
-import numpy as np
-import matplotlib.pyplot as plt
-from abc import ABC
-from torch import nn
-from tqdm import tqdm
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from datetime import datetime
-from torch.utils.data import DataLoader
+from pathlib import Path
+from typing import Optional
+
+import matplotlib.pyplot as plt
+import numpy as np
+import torch
 from IPython.display import clear_output
+from torch import nn
+from torch.utils.data import DataLoader
+from tqdm import tqdm
 
 from fits.config import MODELS_PATH
 
 
-class ForecastingModel(nn.Module, ABC): ...
+@dataclass
+class ModelConfig:
+    """Base model configuration used by :class:`ForecastingModel`.
+
+    The configuration is intentionally typed to avoid passing around loose
+    dictionaries. Concrete models should subclass this dataclass when they need
+    additional parameters.
+    """
+
+    name: Optional[str] = None
+    device: Optional[torch.device | str] = None
+
+
+class ForecastingModel(nn.Module, ABC):
+    """Base class for all forecasting models in the project."""
+
+    def __init__(self, config: ModelConfig):
+        super().__init__()
+        self.config = config
+        self.device = self._resolve_device(config.device)
+
+    @property
+    def model_name(self) -> str:
+        return self.config.name or self.__class__.__name__
+
+    def _resolve_device(self, device: Optional[torch.device | str]) -> torch.device:
+        if device is None:
+            return torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        return torch.device(device)
+
+    def to(self, *args, **kwargs):  # type: ignore[override]
+        super().to(*args, **kwargs)
+        # Keep a reference to the current device for adapters using it internally.
+        if args:
+            self.device = torch.device(args[0])
+        elif "device" in kwargs:
+            self.device = torch.device(kwargs["device"])
+        return self
+
+    @abstractmethod
+    def forward(self, batch, is_train: int = 1):
+        """Compute the training loss for a batch."""
+
+    @abstractmethod
+    def evaluate(self, batch, n_samples: int):
+        """Run model-specific evaluation and return generated samples."""
 
 def Train(
     model: ForecastingModel,
@@ -20,12 +69,14 @@ def Train(
     epochs: int,
     train_loader: DataLoader,
     valid_loader: DataLoader,
-    valid_epoch_interval=10,
-    verbose=True,
+    valid_epoch_interval: int = 10,
+    verbose: bool = True,
 ):
-    model_name = model.__class__.__name__
+    """Generic training loop for :class:`ForecastingModel` implementations."""
+
     current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
-    folder_name = MODELS_PATH / f"{model_name}_{current_time}/"
+    folder_name = MODELS_PATH / f"{model.model_name}_{current_time}"
+    folder_name.mkdir(parents=True, exist_ok=True)
 
     opt = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=1e-6)
 
@@ -39,11 +90,10 @@ def Train(
     )
 
     metrics = {"train_loss": [], "test_loss": []}
-    step = 0
 
-    best_valid_loss = 1e10
+    best_valid_loss = float("inf")
     for epoch_no in range(epochs):
-        avg_loss = 0
+        epoch_loss = 0.0
         model.train()
 
         with tqdm(train_loader) as it:
@@ -51,14 +101,14 @@ def Train(
                 opt.zero_grad()
 
                 loss = model(train_batch)
-                avg_loss += loss.item()
+                epoch_loss += loss.item()
 
                 loss.backward()
                 opt.step()
 
                 it.set_postfix(
                     ordered_dict={
-                        "avg_epoch_loss": avg_loss / batch_no,
+                        "avg_epoch_loss": epoch_loss / batch_no,
                         "epoch": epoch_no,
                     },
                     refresh=False,
@@ -66,34 +116,36 @@ def Train(
 
             shed.step()
 
-        step += 1
-        metrics["train_loss"].append((step, avg_loss))
+        metrics["train_loss"].append((epoch_no + 1, epoch_loss))
 
         if (epoch_no + 1) % valid_epoch_interval == 0:
             model.eval()
-            avg_loss_valid = 0
+            valid_loss = 0.0
+            valid_batches = 0
 
             with torch.no_grad():
                 with tqdm(valid_loader) as it:
                     for batch_no, valid_batch in enumerate(it, start=1):
                         loss = model(valid_batch, is_train=0)
-                        avg_loss_valid += loss.item()
+                        valid_loss += loss.item()
+                        valid_batches = batch_no
 
                         it.set_postfix(
                             ordered_dict={
-                                "valid_avg_epoch_loss": avg_loss_valid / batch_no,
+                                "valid_avg_epoch_loss": valid_loss / batch_no,
                                 "epoch": epoch_no,
                             },
                             refresh=False,
                         )
 
-            metrics["test_loss"].append((step, avg_loss_valid))
+            metrics["test_loss"].append((epoch_no + 1, valid_loss))
 
-            if best_valid_loss > avg_loss_valid:
-                best_valid_loss = avg_loss_valid
+            avg_valid_loss = valid_loss / max(valid_batches, 1)
+            if best_valid_loss > avg_valid_loss:
+                best_valid_loss = avg_valid_loss
                 print(
                     "\n best loss is updated to ",
-                    avg_loss_valid / batch_no,
+                    avg_valid_loss,
                     "at",
                     epoch_no,
                 )
@@ -108,7 +160,7 @@ def Train(
                 plt.plot(*zip(*history))
                 plt.grid()
 
-            plt.savefig(folder_name + "/training.png")
+            plt.savefig(folder_name / "training.png")
             plt.show()
 
         torch.save(model.state_dict(), folder_name / "model.pth")
@@ -155,23 +207,41 @@ def CalcQuantileCRPSSum(target, forecast, eval_points, mean_scaler, scaler):
 
 
 @torch.no_grad()
-def Evaluate(model, test_loader, nsample=100, scaler=1, mean_scaler=0, foldername=""):
-    model.eval()
-    mse_total = 0
-    mae_total = 0
-    evalpoints_total = 0
+def Evaluate(
+    model: ForecastingModel,
+    test_loader: DataLoader,
+    nsample: int = 100,
+    scaler: float = 1,
+    mean_scaler: float = 0,
+    foldername: str = "",
+):
+    """Evaluate a :class:`ForecastingModel` and persist generated outputs.
 
-    all_target = []
-    all_observed_point = []
-    all_observed_time = []
-    all_evalpoint = []
-    all_generated_samples = []
+    The function keeps the same side effects as the legacy implementation (pickle
+    dumps for generated outputs and final metrics) while improving readability
+    and bookkeeping.
+    """
+
+    model.eval()
+    mse_total = 0.0
+    mae_total = 0.0
+    evalpoints_total = 0.0
+
+    all_target: list[torch.Tensor] = []
+    all_observed_point: list[torch.Tensor] = []
+    all_observed_time: list[torch.Tensor] = []
+    all_evalpoint: list[torch.Tensor] = []
+    all_generated_samples: list[torch.Tensor] = []
+
+    output_dir = Path(foldername) if foldername else Path.cwd()
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     with tqdm(test_loader, mininterval=5.0, maxinterval=50.0) as it:
         for batch_no, test_batch in enumerate(it, start=1):
-            output = model.evaluate(test_batch, nsample)
+            samples, c_target, eval_points, observed_points, observed_time = model.evaluate(
+                test_batch, nsample
+            )
 
-            samples, c_target, eval_points, observed_points, observed_time = output
             samples = samples.permute(0, 1, 3, 2)  # (B,nsample,L,K)
             c_target = c_target.permute(0, 2, 1)  # (B,L,K)
             eval_points = eval_points.permute(0, 2, 1)
@@ -204,45 +274,37 @@ def Evaluate(model, test_loader, nsample=100, scaler=1, mean_scaler=0, foldernam
                 refresh=True,
             )
 
-        with open(
-            foldername + "/generated_outputs_nsample" + str(nsample) + ".pk", "wb"
-        ) as f:
-            all_target = torch.cat(all_target, dim=0)
-            all_evalpoint = torch.cat(all_evalpoint, dim=0)
-            all_observed_point = torch.cat(all_observed_point, dim=0)
-            all_observed_time = torch.cat(all_observed_time, dim=0)
-            all_generated_samples = torch.cat(all_generated_samples, dim=0)
+    all_target = torch.cat(all_target, dim=0)
+    all_evalpoint = torch.cat(all_evalpoint, dim=0)
+    all_observed_point = torch.cat(all_observed_point, dim=0)
+    all_observed_time = torch.cat(all_observed_time, dim=0)
+    all_generated_samples = torch.cat(all_generated_samples, dim=0)
 
-            pickle.dump(
-                [
-                    all_generated_samples,
-                    all_target,
-                    all_evalpoint,
-                    all_observed_point,
-                    all_observed_time,
-                    scaler,
-                    mean_scaler,
-                ],
-                f,
-            )
-
-        CRPS = CalcQuantileCRPS(
-            all_target, all_generated_samples, all_evalpoint, mean_scaler, scaler
-        )
-        CRPS_sum = CalcQuantileCRPSSum(
-            all_target, all_generated_samples, all_evalpoint, mean_scaler, scaler
+    with open(output_dir / f"generated_outputs_nsample{nsample}.pk", "wb") as f:
+        pickle.dump(
+            [
+                all_generated_samples,
+                all_target,
+                all_evalpoint,
+                all_observed_point,
+                all_observed_time,
+                scaler,
+                mean_scaler,
+            ],
+            f,
         )
 
-        with open(foldername + "/result_nsample" + str(nsample) + ".pk", "wb") as f:
-            pickle.dump(
-                [
-                    np.sqrt(mse_total / evalpoints_total),
-                    mae_total / evalpoints_total,
-                    CRPS,
-                ],
-                f,
-            )
-            print("RMSE:", np.sqrt(mse_total / evalpoints_total))
-            print("MAE:", mae_total / evalpoints_total)
-            print("CRPS:", CRPS)
-            print("CRPS_sum:", CRPS_sum)
+    crps = CalcQuantileCRPS(all_target, all_generated_samples, all_evalpoint, mean_scaler, scaler)
+    crps_sum = CalcQuantileCRPSSum(
+        all_target, all_generated_samples, all_evalpoint, mean_scaler, scaler
+    )
+
+    rmse = np.sqrt(mse_total / evalpoints_total)
+    mae = mae_total / evalpoints_total
+    with open(output_dir / f"result_nsample{nsample}.pk", "wb") as f:
+        pickle.dump([rmse, mae, crps], f)
+
+    print("RMSE:", rmse)
+    print("MAE:", mae)
+    print("CRPS:", crps)
+    print("CRPS_sum:", crps_sum)
