@@ -1,6 +1,5 @@
-# Runtime dependencies
+requests>=2.32
 numpy>=1.26
 pandas>=2.2
-requests>=2.32
-# Torch is used for model code and dataset/dataloader utilities
 torch>=2.5
+tqdm

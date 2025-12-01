@@ -9,14 +9,16 @@ _DIR_ROOT = Path(__file__).resolve().parent.parent.parent
 
 DATA_PATH = _DIR_ROOT / "data/"
 DATASETS_PATH = DATA_PATH / "datasets/"
+MODELS_PATH = DATA_PATH / "models/"
 
 DATA_PATH.mkdir(parents=True, exist_ok=True)
 DATASETS_PATH.mkdir(parents=True, exist_ok=True)
+MODELS_PATH.mkdir(parents=True, exist_ok=True)
 
 
-class DatasetPaths(Enum):
+class DatasetsPaths(Enum):
     pm25 = DATASETS_PATH / "pm25/pm25_ground.csv"
-    physio = DATASETS_PATH / "physio"
+    physio = DATASETS_PATH / "physio"   # dir of `.txt`s
 
 
 def SeedEverything(seed: int) -> None:

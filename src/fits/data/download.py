@@ -3,7 +3,7 @@ import tarfile
 import zipfile
 import requests
 
-from fits.config import DATASETS_PATH, DatasetPaths
+from fits.config import DATASETS_PATH, DatasetsPaths
 
 
 headers = {
@@ -24,7 +24,7 @@ def DownloadDatasetPhysio() -> None:
                     f.write(chunk)
 
     with tarfile.open(archive_path, mode="r:gz") as t:
-        t.extractall(path=DatasetPaths.physio.value)
+        t.extractall(path=DatasetsPaths.physio.value)
 
     archive_path.unlink()
 
@@ -56,4 +56,4 @@ def DownloadDatasetAirQuality() -> None:
     )
     shutil.rmtree(tmp_dir)
     tmp_dir.mkdir(parents=True, exist_ok=True)
-    shutil.move(DATASETS_PATH / "pm25_ground.txt", DatasetPaths.pm25.value)
+    shutil.move(DATASETS_PATH / "pm25_ground.txt", DatasetsPaths.pm25.value)

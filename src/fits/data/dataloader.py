@@ -1,6 +1,6 @@
 from torch.utils.data import DataLoader
 
-from fits.data.datasets import ForecastingDataset, ModelMode
+from fits.data.dataset import ForecastingDataset, ModelMode
 
 
 def InitDataLoader(
@@ -23,14 +23,14 @@ def InitDataLoader(
         valid_ds,
         batch_size=batch_size,
         num_workers=1,
-        shuffle=False,
+        shuffle=True,
     )
 
     test_loader = DataLoader(
         test_ds,
         batch_size=batch_size,
         num_workers=1,
-        shuffle=False,
+        shuffle=False,  #!
     )
 
     return train_loader, valid_loader, test_loader
