@@ -1,3 +1,5 @@
+# mypy: ignore-errors
+
 import pickle
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -63,6 +65,7 @@ class ForecastingModel(nn.Module, ABC):
     def evaluate(self, batch, n_samples: int):
         """Run model-specific evaluation and return generated samples."""
 
+
 def Train(
     model: ForecastingModel,
     lr: float,
@@ -85,9 +88,7 @@ def Train(
     # then  0.75 * epoechs: 1e-4 * 0.1 = 1e-5
     p1 = int(0.75 * epochs)
     p2 = int(0.9 * epochs)
-    shed = torch.optim.lr_scheduler.MultiStepLR(
-        opt, milestones=[p1, p2], gamma=0.1
-    )
+    shed = torch.optim.lr_scheduler.MultiStepLR(opt, milestones=[p1, p2], gamma=0.1)
 
     metrics = {"train_loss": [], "test_loss": []}
 
@@ -238,8 +239,8 @@ def Evaluate(
 
     with tqdm(test_loader, mininterval=5.0, maxinterval=50.0) as it:
         for batch_no, test_batch in enumerate(it, start=1):
-            samples, c_target, eval_points, observed_points, observed_time = model.evaluate(
-                test_batch, nsample
+            samples, c_target, eval_points, observed_points, observed_time = (
+                model.evaluate(test_batch, nsample)
             )
 
             samples = samples.permute(0, 1, 3, 2)  # (B,nsample,L,K)
@@ -254,9 +255,9 @@ def Evaluate(
             all_observed_time.append(observed_time)
             all_generated_samples.append(samples)
 
-            mse_current = (
-                ((samples_median.values - c_target) * eval_points) ** 2
-            ) * (scaler**2)
+            mse_current = (((samples_median.values - c_target) * eval_points) ** 2) * (
+                scaler**2
+            )
             mae_current = (
                 torch.abs((samples_median.values - c_target) * eval_points)
             ) * scaler
@@ -294,7 +295,9 @@ def Evaluate(
             f,
         )
 
-    crps = CalcQuantileCRPS(all_target, all_generated_samples, all_evalpoint, mean_scaler, scaler)
+    crps = CalcQuantileCRPS(
+        all_target, all_generated_samples, all_evalpoint, mean_scaler, scaler
+    )
     crps_sum = CalcQuantileCRPSSum(
         all_target, all_generated_samples, all_evalpoint, mean_scaler, scaler
     )

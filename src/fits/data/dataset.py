@@ -23,15 +23,15 @@ class ForecastingData:
     feature_ids: torch.Tensor  # [T, K] float
 
 
-class ForecastingDataset(Dataset, ABC):
+class ForecastingDataset(Dataset[ForecastingData], ABC):
     def __init__(
         self,
         mode: ModelMode,
         seq_len: int,  # T
         horizon: int,  # last H observations to forecast
         dim: int,  # K
-        train_share=0.7,
-        validation_share=0.15,
+        train_share: float = 0.7,
+        validation_share: float = 0.15,
     ) -> None:
         assert horizon < seq_len, f"Horizon={horizon} >= seq_len={seq_len}"
         assert train_share + validation_share <= 1, "Incorrect train/validation shares"
@@ -56,8 +56,8 @@ class DatasetAirQuality(ForecastingDataset):
         mode: ModelMode,
         seq_len: int = 48,
         horizon: int = 6,
-        train_share=0.7,
-        validation_share=0.15,
+        train_share: float = 0.7,
+        validation_share: float = 0.15,
     ) -> None:
         super().__init__(
             mode=mode,

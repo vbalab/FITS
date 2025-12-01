@@ -2,3 +2,7 @@ jupyter>=1.1.1
 black[jupyter]>=25.1.0
 ruff>=0.11.7
 mypy>=1.15.0
+pydantic>=2.12.5
+pandas-stubs>=2.2.3.241126
+types-requests
+types-tqdm

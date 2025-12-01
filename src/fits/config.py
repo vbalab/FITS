@@ -18,7 +18,7 @@ MODELS_PATH.mkdir(parents=True, exist_ok=True)
 
 class DatasetsPaths(Enum):
     pm25 = DATASETS_PATH / "pm25/pm25_ground.csv"
-    physio = DATASETS_PATH / "physio"   # dir of `.txt`s
+    physio = DATASETS_PATH / "physio"  # dir of `.txt`s
 
 
 def SeedEverything(seed: int) -> None:
