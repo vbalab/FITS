@@ -14,7 +14,7 @@ from torch.utils.data import DataLoader
 from IPython.display import clear_output
 
 from fits.config import MODELS_PATH
-from fits.data.dataset import ForecastingData
+from fits.data.dataset import ForecastingData, NormalizationStats
 
 
 @dataclass
@@ -220,8 +220,9 @@ def Evaluate(
     model: ForecastingModel,
     test_loader: DataLoader,
     nsample: int = 100,
-    scaler: float = 1,
-    mean_scaler: float = 0,
+    normalization: NormalizationStats | None = None,
+    scaler: float | torch.Tensor = 1,
+    mean_scaler: float | torch.Tensor = 0,
     foldername: str = "",
 ):
     """Evaluate a :class:`ForecastingModel` and persist generated outputs.
@@ -245,6 +246,13 @@ def Evaluate(
     output_dir = Path(foldername) if foldername else Path.cwd()
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    if normalization is not None:
+        scaler = normalization.std
+        mean_scaler = normalization.mean
+
+    scaler_tensor = torch.as_tensor(scaler)
+    mean_tensor = torch.as_tensor(mean_scaler)
+
     with tqdm(test_loader, mininterval=5.0, maxinterval=50.0) as it:
         for batch_no, test_batch in enumerate(it, start=1):
             forecasted_data = model.evaluate(test_batch, nsample)
@@ -260,6 +268,11 @@ def Evaluate(
             eval_points = eval_points.permute(0, 2, 1)
             observed_points = observed_points.permute(0, 2, 1)
 
+            scaler_tensor = torch.as_tensor(scaler, device=samples.device)
+            mean_tensor = torch.as_tensor(mean_scaler, device=samples.device)
+            scaler = scaler_tensor
+            mean_scaler = mean_tensor
+
             samples_median = samples.median(dim=1)
             all_target.append(c_target)
             all_evalpoint.append(eval_points)
@@ -267,12 +280,12 @@ def Evaluate(
             all_observed_time.append(observed_time)
             all_generated_samples.append(samples)
 
-            mse_current = (((samples_median.values - c_target) * eval_points) ** 2) * (
-                scaler**2
-            )
+            mse_current = (
+                ((samples_median.values - c_target) * eval_points) ** 2
+            ) * (scaler_tensor**2)
             mae_current = (
                 torch.abs((samples_median.values - c_target) * eval_points)
-            ) * scaler
+            ) * scaler_tensor
 
             mse_total += mse_current.sum().item()
             mae_total += mae_current.sum().item()
@@ -295,8 +308,8 @@ def Evaluate(
                 torch.cat(all_evalpoint, dim=0),
                 torch.cat(all_observed_point, dim=0),
                 torch.cat(all_observed_time, dim=0),
-                scaler,
-                mean_scaler,
+                scaler_tensor.cpu(),
+                mean_tensor.cpu(),
             ],
             f,
         )
