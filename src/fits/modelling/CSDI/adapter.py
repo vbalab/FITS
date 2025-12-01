@@ -6,7 +6,7 @@ from typing import Literal
 import torch
 
 from fits.modelling.CSDI.model import CSDI_Forecasting
-from fits.modelling.framework import ForecastingModel, ModelConfig
+from fits.modelling.framework import ForecastedData, ForecastingModel, ModelConfig
 from fits.data.dataset import ForecastingData
 
 
@@ -60,14 +60,25 @@ class CSDIAdapter(ForecastingModel):
             config=config.as_csdi_dict(), device=self.device, target_dim=self.target_dim
         ).to(self.device)
 
-    def forward(self, batch):
+    def forward(self, batch: ForecastingData):
         csdi_batch = self._adapt_batch(batch)
         return self.csdi_model(csdi_batch)
 
-    def evaluate(self, batch, n_samples: int):
-        return self.csdi_model.evaluate(batch, n_samples)
+    def evaluate(self, batch: ForecastingData, n_samples: int) -> ForecastedData:
+        csdi_batch = self._adapt_batch(batch)
+        samples, observed_data, target_mask, observed_mask, time_points = (
+            self.csdi_model.evaluate(csdi_batch, n_samples)
+        )
 
-    def _adapt_batch(self, batch) -> dict:
+        return ForecastedData(
+            forecasted_data=samples,
+            observed_data=observed_data,
+            evaluation_points=target_mask,
+            observed_mask=observed_mask,
+            time_points=time_points,
+        )
+
+    def _adapt_batch(self, batch: ForecastingData | dict) -> dict:
         """Convert :class:`ForecastingData` batches into CSDI's expected dict format."""
 
         if isinstance(batch, ForecastingData):

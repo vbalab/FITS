@@ -14,13 +14,16 @@ from torch.utils.data import DataLoader
 from IPython.display import clear_output
 
 from fits.config import MODELS_PATH
+from fits.data.dataset import ForecastingData
 
 
 @dataclass
 class ForecastedData:
-    forecasted_data: torch.Tensor  # [T, K] float
-    observed_data: torch.Tensor  # [T, K] float
-    observed_mask: torch.Tensor  # [T, K] int
+    forecasted_data: torch.Tensor  # [B, nsample, K, L] float
+    observed_data: torch.Tensor  # [B, K, L] float
+    evaluation_points: torch.Tensor  # [B, K, L] int
+    observed_mask: torch.Tensor  # [B, K, L] int
+    time_points: torch.Tensor  # [B, L] float
 
 @dataclass
 class ModelConfig:
@@ -62,11 +65,11 @@ class ForecastingModel(nn.Module, ABC):
         return self
 
     @abstractmethod
-    def forward(self, batch: ?ForecastingData?, is_train: int = 1):
+    def forward(self, batch: ForecastingData, is_train: int = 1):
         """Compute the training loss for a batch."""
 
     @abstractmethod
-    def evaluate(self, batch: ?ForecastingData?, n_samples: int) -> ?ForecastedData?:
+    def evaluate(self, batch: ForecastingData, n_samples: int) -> ForecastedData:
         """Run model-specific evaluation and return generated samples."""
 
 
@@ -243,9 +246,13 @@ def Evaluate(
 
     with tqdm(test_loader, mininterval=5.0, maxinterval=50.0) as it:
         for batch_no, test_batch in enumerate(it, start=1):
-            samples, c_target, eval_points, observed_points, observed_time = (
-                model.evaluate(test_batch, nsample)
-            )
+            forecasted_data = model.evaluate(test_batch, nsample)
+
+            samples = forecasted_data.forecasted_data
+            c_target = forecasted_data.observed_data
+            eval_points = forecasted_data.evaluation_points
+            observed_points = forecasted_data.observed_mask
+            observed_time = forecasted_data.time_points
 
             samples = samples.permute(0, 1, 3, 2)  # (B,nsample,L,K)
             c_target = c_target.permute(0, 2, 1)  # (B,L,K)
