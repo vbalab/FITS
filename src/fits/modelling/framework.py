@@ -21,9 +21,10 @@ from fits.data.dataset import ForecastingData
 class ForecastedData:
     forecasted_data: torch.Tensor  # [B, nsample, K, L] float
     observed_data: torch.Tensor  # [B, K, L] float
-    evaluation_points: torch.Tensor  # [B, K, L] int
     observed_mask: torch.Tensor  # [B, K, L] int
+    forecast_mask: torch.Tensor  # [B, K, L] int
     time_points: torch.Tensor  # [B, L] float
+
 
 @dataclass
 class ModelConfig:
@@ -97,7 +98,7 @@ def Train(
     p2 = int(0.9 * epochs)
     shed = torch.optim.lr_scheduler.MultiStepLR(opt, milestones=[p1, p2], gamma=0.1)
 
-    metrics = {"train_loss": [], "test_loss": []}
+    metrics = {"train_loss": [], "test_loss": []}  # type: ignore[override]
 
     best_valid_loss = float("inf")
     for epoch_no in range(epochs):
@@ -250,7 +251,7 @@ def Evaluate(
 
             samples = forecasted_data.forecasted_data
             c_target = forecasted_data.observed_data
-            eval_points = forecasted_data.evaluation_points
+            eval_points = forecasted_data.forecast_mask
             observed_points = forecasted_data.observed_mask
             observed_time = forecasted_data.time_points
 

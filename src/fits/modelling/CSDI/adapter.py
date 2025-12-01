@@ -14,15 +14,14 @@ from fits.data.dataset import ForecastingData
 class CSDIDiffusionConfig:
     """Typed configuration for the diffusion backbone inside CSDI."""
 
+    layers: int = 4
+    channels: int = 64
+    nheads: int = 8
+    diffusion_embedding_dim: int = 128
     beta_start: float = 0.0001
-    beta_end: float = 0.02
+    beta_end: float = 0.5
     num_steps: int = 50
     schedule: Literal["quad", "linear"] = "quad"
-    is_linear: bool = True
-    channels: int = 64
-    diffusion_embedding_dim: int = 128
-    nheads: int = 8
-    layers: int = 4
 
 
 @dataclass
@@ -31,10 +30,10 @@ class CSDIConfig(ModelConfig):
 
     target_dim: int = 1
     time_embedding_dim: int = 128
-    feature_embedding_dim: int = 128
+    feature_embedding_dim: int = 16
     is_unconditional: bool = False
     target_strategy: Literal["mix", "random", "historical"] = "mix"
-    num_sample_features: int = 1
+    num_sample_features: int = 64
     diffusion: CSDIDiffusionConfig = field(default_factory=CSDIDiffusionConfig)
 
     def as_csdi_dict(self) -> dict:
@@ -53,11 +52,14 @@ class CSDIConfig(ModelConfig):
 class CSDIAdapter(ForecastingModel):
     """Adapter that wraps the original CSDI implementation into :class:`ForecastingModel`."""
 
-    def __init__(self, config: CSDIConfig):
+    def __init__(self, config: CSDIConfig = CSDIConfig()):
         super().__init__(config)
         self.target_dim = config.target_dim
+
         self.csdi_model = CSDI_Forecasting(
-            config=config.as_csdi_dict(), device=self.device, target_dim=self.target_dim
+            config=config.as_csdi_dict(),
+            device=self.device,
+            target_dim=self.target_dim,
         ).to(self.device)
 
     def forward(self, batch: ForecastingData):
@@ -73,25 +75,18 @@ class CSDIAdapter(ForecastingModel):
         return ForecastedData(
             forecasted_data=samples,
             observed_data=observed_data,
-            evaluation_points=target_mask,
             observed_mask=observed_mask,
+            forecast_mask=target_mask,
             time_points=time_points,
         )
 
-    def _adapt_batch(self, batch: ForecastingData | dict) -> dict:
+    def _adapt_batch(self, batch: ForecastingData) -> dict:
         """Convert :class:`ForecastingData` batches into CSDI's expected dict format."""
+        assert isinstance(batch, ForecastingData)
 
-        if isinstance(batch, ForecastingData):
-            observed_data = batch.observed_data
-            observed_mask = batch.observed_mask
-            time_points = batch.time_points
-        else:
-            # Assume mapping-like batches from a custom collate_fn.
-            observed_data = batch["observed_data"]
-            observed_mask = batch["observed_mask"]
-            time_points = (
-                batch["time_points"] if "time_points" in batch else batch["timepoints"]
-            )
+        observed_data = batch.observed_data
+        observed_mask = batch.observed_mask
+        time_points = batch.time_points
 
         # CSDI expects shape [B, L] for timepoints; ForecastingData stores [B, L, K].
         if time_points.dim() == 3:
