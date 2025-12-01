@@ -1,3 +1,5 @@
+# mypy: ignore-errors
+
 from dataclasses import asdict, dataclass, field
 from typing import Literal
 
@@ -76,7 +78,9 @@ class CSDIAdapter(ForecastingModel):
             # Assume mapping-like batches from a custom collate_fn.
             observed_data = batch["observed_data"]
             observed_mask = batch["observed_mask"]
-            time_points = batch["time_points"] if "time_points" in batch else batch["timepoints"]
+            time_points = (
+                batch["time_points"] if "time_points" in batch else batch["timepoints"]
+            )
 
         # CSDI expects shape [B, L] for timepoints; ForecastingData stores [B, L, K].
         if time_points.dim() == 3:

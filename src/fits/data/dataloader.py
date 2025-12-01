@@ -1,13 +1,19 @@
+from typing import Any
+
 from torch.utils.data import DataLoader
 
-from fits.data.dataset import ForecastingDataset, ModelMode
+from fits.data.dataset import ForecastingData, ForecastingDataset, ModelMode
 
 
 def InitDataLoader(
     dataset_cls: type[ForecastingDataset],
     batch_size: int = 128,
-    **dataset_kwargs,
-) -> tuple[DataLoader, DataLoader, DataLoader]:
+    **dataset_kwargs: Any,
+) -> tuple[
+    DataLoader[ForecastingData],
+    DataLoader[ForecastingData],
+    DataLoader[ForecastingData],
+]:
     train_ds = dataset_cls(mode=ModelMode.train, **dataset_kwargs)
     valid_ds = dataset_cls(mode=ModelMode.valid, **dataset_kwargs)
     test_ds = dataset_cls(mode=ModelMode.test, **dataset_kwargs)
