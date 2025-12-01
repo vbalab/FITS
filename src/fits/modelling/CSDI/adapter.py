@@ -60,9 +60,9 @@ class CSDIAdapter(ForecastingModel):
             config=config.as_csdi_dict(), device=self.device, target_dim=self.target_dim
         ).to(self.device)
 
-    def forward(self, batch, is_train: int = 1):
+    def forward(self, batch):
         csdi_batch = self._adapt_batch(batch)
-        return self.csdi_model(csdi_batch, is_train=is_train)
+        return self.csdi_model(csdi_batch)
 
     def evaluate(self, batch, n_samples: int):
         return self.csdi_model.evaluate(batch, n_samples)

@@ -1,8 +1,8 @@
 import torch
 import random
 import numpy as np
-from pathlib import Path
 from enum import Enum
+from pathlib import Path
 
 
 _DIR_ROOT = Path(__file__).resolve().parent.parent.parent

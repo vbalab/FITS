@@ -1,7 +1,4 @@
 import torch
-
-# mypy: ignore-errors
-
 import numpy as np
 import torch.nn as nn
 from fits.modelling.CSDI.diff_model import diff_CSDI

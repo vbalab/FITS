@@ -1,22 +1,26 @@
-# mypy: ignore-errors
-
 import pickle
-from abc import ABC, abstractmethod
-from dataclasses import dataclass
-from datetime import datetime
 from pathlib import Path
 from typing import Optional
+from datetime import datetime
+from dataclasses import dataclass
+from abc import ABC, abstractmethod
 
-import matplotlib.pyplot as plt
-import numpy as np
 import torch
-from IPython.display import clear_output
+import numpy as np
+import matplotlib.pyplot as plt
 from torch import nn
-from torch.utils.data import DataLoader
 from tqdm import tqdm
+from torch.utils.data import DataLoader
+from IPython.display import clear_output
 
 from fits.config import MODELS_PATH
 
+
+@dataclass
+class ForecastedData:
+    forecasted_data: torch.Tensor  # [T, K] float
+    observed_data: torch.Tensor  # [T, K] float
+    observed_mask: torch.Tensor  # [T, K] int
 
 @dataclass
 class ModelConfig:
@@ -58,11 +62,11 @@ class ForecastingModel(nn.Module, ABC):
         return self
 
     @abstractmethod
-    def forward(self, batch, is_train: int = 1):
+    def forward(self, batch: ?ForecastingData?, is_train: int = 1):
         """Compute the training loss for a batch."""
 
     @abstractmethod
-    def evaluate(self, batch, n_samples: int):
+    def evaluate(self, batch: ?ForecastingData?, n_samples: int) -> ?ForecastedData?:
         """Run model-specific evaluation and return generated samples."""
 
 
@@ -167,7 +171,7 @@ def Train(
         torch.save(model.state_dict(), folder_name / "model.pth")
 
 
-def CalcQuantileLoss(target, forecast, q: float, eval_points) -> float:
+def CalcQuantileLoss(target, forecast, q: float, eval_points) -> torch.Tensor:
     return 2 * torch.sum(
         torch.abs((forecast - target) * eval_points * ((target <= forecast) * 1.0 - q))
     )
@@ -275,20 +279,14 @@ def Evaluate(
                 refresh=True,
             )
 
-    all_target = torch.cat(all_target, dim=0)
-    all_evalpoint = torch.cat(all_evalpoint, dim=0)
-    all_observed_point = torch.cat(all_observed_point, dim=0)
-    all_observed_time = torch.cat(all_observed_time, dim=0)
-    all_generated_samples = torch.cat(all_generated_samples, dim=0)
-
     with open(output_dir / f"generated_outputs_nsample{nsample}.pk", "wb") as f:
         pickle.dump(
             [
-                all_generated_samples,
-                all_target,
-                all_evalpoint,
-                all_observed_point,
-                all_observed_time,
+                torch.cat(all_generated_samples, dim=0),
+                torch.cat(all_target, dim=0),
+                torch.cat(all_evalpoint, dim=0),
+                torch.cat(all_observed_point, dim=0),
+                torch.cat(all_observed_time, dim=0),
                 scaler,
                 mean_scaler,
             ],
