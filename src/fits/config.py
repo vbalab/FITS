@@ -1,0 +1,28 @@
+import torch
+import random
+import numpy as np
+from pathlib import Path
+from enum import Enum
+
+
+_DIR_ROOT = Path(__file__).resolve().parent.parent.parent
+
+DATA_PATH = _DIR_ROOT / "data/"
+DATASETS_PATH = DATA_PATH / "datasets/"
+
+DATA_PATH.mkdir(parents=True, exist_ok=True)
+DATASETS_PATH.mkdir(parents=True, exist_ok=True)
+
+
+class DatasetPaths(Enum):
+    pm25 = DATASETS_PATH / "pm25/pm25_ground.csv"
+    physio = DATASETS_PATH / "physio"
+
+
+def SeedEverything(seed: int) -> None:
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = False
+    print(f"Global seed set to {seed}")
