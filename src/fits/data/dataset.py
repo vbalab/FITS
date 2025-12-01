@@ -24,6 +24,18 @@ class ForecastingData:
     feature_ids: torch.Tensor  # [T, K] float
 
 
+@dataclass
+class NormalizationStats:
+    mean: torch.Tensor
+    std: torch.Tensor
+
+    def as_device(self, device: torch.device, dtype: torch.dtype = torch.float32) -> "NormalizationStats":
+        return NormalizationStats(
+            mean=self.mean.to(device=device, dtype=dtype),
+            std=self.std.to(device=device, dtype=dtype),
+        )
+
+
 class ForecastingDataset(Dataset[ForecastingData], ABC):
     def __init__(
         self,
@@ -59,6 +71,8 @@ class DatasetAirQuality(ForecastingDataset):
         horizon: int = 6,
         train_share: float = 0.7,
         validation_share: float = 0.15,
+        normalization: bool = True,
+        normalization_stats: NormalizationStats | None = None,
     ) -> None:
         super().__init__(
             mode=mode,
@@ -91,7 +105,7 @@ class DatasetAirQuality(ForecastingDataset):
         ), "Not enough time steps for the requested sequence length"
 
         train_end = int(num_sequences * train_share)
-        valid_end = int(num_sequences * validation_share)
+        valid_end = train_end + int(num_sequences * validation_share)
 
         if mode is ModelMode.train:
             self.start = 0
@@ -114,6 +128,16 @@ class DatasetAirQuality(ForecastingDataset):
             .repeat(self.seq_len, 1)
         )
 
+        if normalization_stats is None and normalization:
+            normalization_stats = self._compute_training_normalization(
+                values=values,
+                mask=mask,
+                train_sequences=train_end,
+                seq_len=self.seq_len,
+            )
+
+        self.normalization_stats = normalization_stats
+
     def __getitem__(self, index: int) -> ForecastingData:
         start_idx = self.start + index
         end_idx = start_idx + self.seq_len
@@ -123,8 +147,8 @@ class DatasetAirQuality(ForecastingDataset):
         observed_mask[-self.horizon :] = 0
 
         window_data = self.data[start_idx:end_idx]
-        observed_data = window_data.clone()
-        observed_data = observed_data * observed_mask
+        window_data = self._normalize(window_data)
+        observed_data = window_data * observed_mask
 
         return ForecastingData(
             observed_data=observed_data,
@@ -135,3 +159,41 @@ class DatasetAirQuality(ForecastingDataset):
 
     def __len__(self) -> int:
         return self.end - self.start
+
+    @staticmethod
+    def _compute_training_normalization(
+        values: np.ndarray,
+        mask: np.ndarray,
+        train_sequences: int,
+        seq_len: int,
+    ) -> NormalizationStats:
+        last_index = train_sequences + seq_len - 1
+
+        observed_values = values[:last_index]
+        observed_mask = mask[:last_index]
+
+        feature_sum = (observed_values * observed_mask).sum(axis=0)
+        feature_count = observed_mask.sum(axis=0)
+
+        mean = feature_sum / np.clip(feature_count, a_min=1, a_max=None)
+        variance = (
+            ((observed_values - mean) ** 2) * observed_mask
+        ).sum(axis=0) / np.clip(feature_count, a_min=1, a_max=None)
+
+        std = np.sqrt(variance)
+        std[std == 0] = 1.0
+
+        return NormalizationStats(
+            mean=torch.from_numpy(mean.astype(np.float32)),
+            std=torch.from_numpy(std.astype(np.float32)),
+        )
+
+    def _normalize(self, window_data: torch.Tensor) -> torch.Tensor:
+        if self.normalization_stats is None:
+            return window_data
+
+        stats = self.normalization_stats
+        if stats.mean.device != window_data.device:
+            stats = stats.as_device(window_data.device, window_data.dtype)
+
+        return (window_data - stats.mean) / stats.std
