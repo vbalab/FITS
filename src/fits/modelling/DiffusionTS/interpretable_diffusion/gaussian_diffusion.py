@@ -62,9 +62,27 @@ class Diffusion_TS(nn.Module):
         self.feature_size = feature_size
         self.ff_weight = default(reg_weight, math.sqrt(self.seq_length) / 5)
 
-        self.model = Transformer(n_feat=feature_size, n_channel=seq_length, n_layer_enc=n_layer_enc, n_layer_dec=n_layer_dec,
-                                 n_heads=n_heads, attn_pdrop=attn_pd, resid_pdrop=resid_pd, mlp_hidden_times=mlp_hidden_times,
-                                 max_len=seq_length, n_embd=d_model, conv_params=[kernel_size, padding_size], **kwargs)
+        if self.feature_size is None:
+            raise ValueError("feature_size must be provided for Diffusion_TS")
+
+        d_model = default(d_model, self.feature_size)
+        if d_model is None:
+            raise ValueError("d_model must be provided when feature_size is None")
+
+        self.model = Transformer(
+            n_feat=feature_size,
+            n_channel=seq_length,
+            n_layer_enc=n_layer_enc,
+            n_layer_dec=n_layer_dec,
+            n_heads=n_heads,
+            attn_pdrop=attn_pd,
+            resid_pdrop=resid_pd,
+            mlp_hidden_times=mlp_hidden_times,
+            max_len=seq_length,
+            n_embd=d_model,
+            conv_params=[kernel_size, padding_size],
+            **kwargs,
+        )
 
         if beta_schedule == 'linear':
             betas = linear_beta_schedule(timesteps)
