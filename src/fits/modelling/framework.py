@@ -1,5 +1,4 @@
 import pickle
-from pathlib import Path
 from typing import Optional
 from datetime import datetime
 from dataclasses import dataclass
@@ -240,32 +239,27 @@ def Evaluate(
     scaler_tensor = torch.as_tensor(normalization.std, device=model.device)
     mean_tensor = torch.as_tensor(normalization.mean, device=model.device)
 
+    all_forecasted_data: list[torch.Tensor] = []
+    all_forecast_mask: list[torch.Tensor] = []
     all_observed_data: list[torch.Tensor] = []
     all_observed_mask: list[torch.Tensor] = []
     all_time_points: list[torch.Tensor] = []
-    all_forecast_mask: list[torch.Tensor] = []
-    all_forecasted_data: list[torch.Tensor] = []
 
     with tqdm(test_loader, mininterval=5.0, maxinterval=50.0) as it:
         for batch_no, test_batch in enumerate(it, start=1):
             forecasted = model.evaluate(test_batch, nsample)
 
-            forecasted_data = forecasted.forecasted_data
-            forecast_mask = forecasted.forecast_mask
-            observed_data = forecasted.observed_data
-            observed_mask = forecasted.observed_mask
+            forecasted_data = forecasted.forecasted_data.permute(0, 1, 3, 2)  # (B,nsample,L,K)
+            forecast_mask = forecasted.forecast_mask.permute(0, 2, 1)
+            observed_data = forecasted.observed_data.permute(0, 2, 1)  # (B,L,K)
+            observed_mask = forecasted.observed_mask.permute(0, 2, 1)
             time_points = forecasted.time_points
 
-            forecasted_data = forecasted_data.permute(0, 1, 3, 2)  # (B,nsample,L,K)
-            forecast_mask = forecast_mask.permute(0, 2, 1)
-            observed_data = observed_data.permute(0, 2, 1)  # (B,L,K)
-            observed_mask = observed_mask.permute(0, 2, 1)
-
-            all_observed_data.append(observed_data)
+            all_forecasted_data.append(forecasted_data)
             all_forecast_mask.append(forecast_mask)
+            all_observed_data.append(observed_data)
             all_observed_mask.append(observed_mask)
             all_time_points.append(time_points)
-            all_forecasted_data.append(forecasted_data)
 
             forecasted_data_median = forecasted_data.median(dim=1)
 
@@ -285,18 +279,24 @@ def Evaluate(
                     "rmse_total": np.sqrt(mse_total / evalpoints_total),
                     "mae_total": mae_total / evalpoints_total,
                 "batch_no": batch_no,
-            },
-            refresh=True,
-        )
+                },
+                refresh=True,
+            )
+
+    all_forecasted_data_tensor = torch.cat(all_forecasted_data, dim=0)
+    all_forecast_mask_tensor = torch.cat(all_forecast_mask, dim=0)
+    all_observed_data_tensor = torch.cat(all_observed_data, dim=0)
+    all_observed_mask_tensor = torch.cat(all_observed_mask, dim=0)
+    all_time_points_tensor = torch.cat(all_time_points, dim=0)
 
     with open(folder_name / f"generated_outputs_nsample{nsample}.pk", "wb") as f:
         pickle.dump(
             [
-                torch.cat(all_forecasted_data, dim=0),
-                torch.cat(all_forecast_mask, dim=0),
-                torch.cat(all_observed_data, dim=0),
-                torch.cat(all_observed_mask, dim=0),
-                torch.cat(all_time_points, dim=0),
+                all_forecasted_data_tensor,
+                all_forecast_mask_tensor,
+                all_observed_data_tensor,
+                all_observed_mask_tensor,
+                all_time_points_tensor,
                 scaler_tensor.cpu(),
                 mean_tensor.cpu(),
             ],
@@ -304,10 +304,18 @@ def Evaluate(
         )
 
     crps = CalcQuantileCRPS(
-        all_observed_data, all_forecasted_data, all_forecast_mask, mean_tensor, scaler_tensor,
+        all_observed_data_tensor,
+        all_forecasted_data_tensor,
+        all_forecast_mask_tensor,
+        mean_tensor,
+        scaler_tensor,
     )
     crps_sum = CalcQuantileCRPSSum(
-        all_observed_data, all_forecasted_data, all_forecast_mask, mean_tensor, scaler_tensor,
+        all_observed_data_tensor,
+        all_forecasted_data_tensor,
+        all_forecast_mask_tensor,
+        mean_tensor,
+        scaler_tensor,
     )
 
     rmse = np.sqrt(mse_total / evalpoints_total)
