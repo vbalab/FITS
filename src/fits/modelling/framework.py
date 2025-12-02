@@ -134,7 +134,7 @@ def Train(
             with torch.no_grad():
                 with tqdm(valid_loader) as it:
                     for batch_no, valid_batch in enumerate(it, start=1):
-                        loss = model(valid_batch, is_train=0)
+                        loss = model(valid_batch)
                         valid_loss += loss.item()
                         valid_batches = batch_no
 

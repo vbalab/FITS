@@ -61,9 +61,14 @@ class CSDIAdapter(ForecastingModel):
         ).to(self.device)
 
     def forward(self, batch: ForecastingData):
+        if self.training:
+            is_train = 1
+        else:
+            is_train = 0
+
         csdi_batch = self._adapt_batch(batch)
         self._validate_batch_dimensions(csdi_batch)
-        return self.csdi_model(csdi_batch, is_train=1)
+        return self.csdi_model(csdi_batch, is_train=is_train)
 
     def evaluate(self, batch: ForecastingData, n_samples: int) -> ForecastedData:
         csdi_batch = self._adapt_batch(batch)
