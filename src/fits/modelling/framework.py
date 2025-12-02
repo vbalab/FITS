@@ -76,10 +76,10 @@ class ForecastingModel(nn.Module, ABC):
 
 def Train(
     model: ForecastingModel,
-    lr: float,
-    epochs: int,
     train_loader: DataLoader,
     valid_loader: DataLoader,
+    lr: float = 1.0e-3,
+    epochs: int = 200,
     valid_epoch_interval: int = 10,
     verbose: bool = True,
 ):
