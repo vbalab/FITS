@@ -98,7 +98,7 @@ def Train(
     p2 = int(0.9 * epochs)
     shed = torch.optim.lr_scheduler.MultiStepLR(opt, milestones=[p1, p2], gamma=0.1)
 
-    metrics = {"train_loss": [], "test_loss": []}  # type: ignore[override]
+    metrics: dict[str, list[float]] = {"train_loss": [], "test_loss": []}
 
     best_valid_loss = float("inf")
     for epoch_no in range(epochs):
