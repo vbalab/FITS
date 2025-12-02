@@ -22,6 +22,7 @@ class ForecastingData:
     observed_mask: torch.Tensor  # [T, K] int
     time_points: torch.Tensor  # [T, K] float
     feature_ids: torch.Tensor  # [T, K] float
+    conditioning_mask: torch.Tensor | None = None  # [T, K] int
 
 
 @dataclass
@@ -145,18 +146,19 @@ class DatasetAirQuality(ForecastingDataset):
         end_idx = start_idx + self.seq_len
 
         window_mask = self.mask[start_idx:end_idx]
-        observed_mask = window_mask.clone()
-        observed_mask[-self.horizon :] = 0
+        conditioning_mask = window_mask.clone()
+        conditioning_mask[-self.horizon :] = 0
 
         window_data = self.data[start_idx:end_idx]
         window_data = self._normalize(window_data)
-        observed_data = window_data * observed_mask
+        observed_data = window_data
 
         return ForecastingData(
             observed_data=observed_data,
-            observed_mask=observed_mask,
+            observed_mask=window_mask,
             time_points=self.time_points,
             feature_ids=self.feature_ids,
+            conditioning_mask=conditioning_mask,
         )
 
     def __len__(self) -> int:

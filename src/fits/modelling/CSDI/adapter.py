@@ -62,10 +62,10 @@ class CSDIAdapter(ForecastingModel):
             target_dim=self.target_dim,
         ).to(self.device)
 
-    def forward(self, batch: ForecastingData):
+    def forward(self, batch: ForecastingData, is_train: int = 1):
         csdi_batch = self._adapt_batch(batch)
         self._validate_batch_dimensions(csdi_batch)
-        return self.csdi_model(csdi_batch)
+        return self.csdi_model(csdi_batch, is_train=is_train)
 
     def evaluate(self, batch: ForecastingData, n_samples: int) -> ForecastedData:
         csdi_batch = self._adapt_batch(batch)
@@ -88,13 +88,16 @@ class CSDIAdapter(ForecastingModel):
 
         observed_data = batch.observed_data
         observed_mask = batch.observed_mask
+        conditioning_mask = (
+            batch.conditioning_mask if batch.conditioning_mask is not None else observed_mask
+        )
         time_points = batch.time_points
 
         # CSDI expects shape [B, L] for timepoints; ForecastingData stores [B, L, K].
         if time_points.dim() == 3:
             time_points = time_points[..., 0]
 
-        gt_mask = observed_mask
+        gt_mask = conditioning_mask
 
         return {
             "observed_data": observed_data.to(dtype=torch.float32, device=self.device),
