@@ -28,7 +28,7 @@ class CSDIDiffusionConfig:
 class CSDIConfig(ModelConfig):
     """Typed configuration for the :class:`CSDIAdapter`."""
 
-    target_dim: int = 1
+    target_dim: int = 36
     time_embedding_dim: int = 128
     feature_embedding_dim: int = 16
     is_unconditional: bool = False
@@ -64,10 +64,12 @@ class CSDIAdapter(ForecastingModel):
 
     def forward(self, batch: ForecastingData):
         csdi_batch = self._adapt_batch(batch)
+        self._validate_batch_dimensions(csdi_batch)
         return self.csdi_model(csdi_batch)
 
     def evaluate(self, batch: ForecastingData, n_samples: int) -> ForecastedData:
         csdi_batch = self._adapt_batch(batch)
+        self._validate_batch_dimensions(csdi_batch)
         samples, observed_data, target_mask, observed_mask, time_points = (
             self.csdi_model.evaluate(csdi_batch, n_samples)
         )
@@ -100,3 +102,14 @@ class CSDIAdapter(ForecastingModel):
             "timepoints": time_points.to(dtype=torch.float32, device=self.device),
             "gt_mask": gt_mask.to(dtype=torch.float32, device=self.device),
         }
+
+    def _validate_batch_dimensions(self, batch: dict) -> None:
+        """Ensure the batch feature dimension matches the configured target dimension."""
+
+        observed_data = batch["observed_data"]
+        if observed_data.shape[-1] != self.target_dim:
+            raise ValueError(
+                "Observed feature dimension does not match CSDI configuration: "
+                f"got {observed_data.shape[-1]}, expected {self.target_dim}. "
+                "Set `CSDIConfig.target_dim` to the number of features in your dataset."
+            )
