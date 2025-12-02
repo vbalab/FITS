@@ -237,6 +237,9 @@ def Evaluate(
     mae_total = 0.0
     evalpoints_total = 0.0
 
+    scaler_tensor = torch.as_tensor(normalization.std, device=model.device)
+    mean_tensor = torch.as_tensor(normalization.mean, device=model.device)
+
     all_observed_data: list[torch.Tensor] = []
     all_observed_mask: list[torch.Tensor] = []
     all_time_points: list[torch.Tensor] = []
@@ -281,13 +284,10 @@ def Evaluate(
                 ordered_dict={
                     "rmse_total": np.sqrt(mse_total / evalpoints_total),
                     "mae_total": mae_total / evalpoints_total,
-                    "batch_no": batch_no,
-                },
-                refresh=True,
-            )
-
-    scaler_tensor = torch.as_tensor(normalization.std, device=forecasted_data.device)
-    mean_tensor = torch.as_tensor(normalization.mean, device=forecasted_data.device)
+                "batch_no": batch_no,
+            },
+            refresh=True,
+        )
 
     with open(folder_name / f"generated_outputs_nsample{nsample}.pk", "wb") as f:
         pickle.dump(
