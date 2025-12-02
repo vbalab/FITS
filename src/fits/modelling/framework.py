@@ -238,6 +238,8 @@ def Evaluate(
 
     scaler_tensor = torch.as_tensor(normalization.std, device=model.device)
     mean_tensor = torch.as_tensor(normalization.mean, device=model.device)
+    scaler_broadcast = scaler_tensor.view(1, 1, -1)
+    mean_broadcast = mean_tensor.view(1, 1, -1)
 
     all_forecasted_data: list[torch.Tensor] = []
     all_forecast_mask: list[torch.Tensor] = []
@@ -289,14 +291,19 @@ def Evaluate(
     all_observed_mask_tensor = torch.cat(all_observed_mask, dim=0)
     all_time_points_tensor = torch.cat(all_time_points, dim=0)
 
+    denorm_forecasted = (
+        all_forecasted_data_tensor * scaler_tensor.view(1, 1, 1, -1) + mean_tensor.view(1, 1, 1, -1)
+    )
+    denorm_observed = all_observed_data_tensor * scaler_broadcast + mean_broadcast
+
     with open(folder_name / f"generated_outputs_nsample{nsample}.pk", "wb") as f:
         pickle.dump(
             [
-                all_forecasted_data_tensor,
-                all_forecast_mask_tensor,
-                all_observed_data_tensor,
-                all_observed_mask_tensor,
-                all_time_points_tensor,
+                denorm_forecasted.cpu(),
+                all_forecast_mask_tensor.cpu(),
+                denorm_observed.cpu(),
+                all_observed_mask_tensor.cpu(),
+                all_time_points_tensor.cpu(),
                 scaler_tensor.cpu(),
                 mean_tensor.cpu(),
             ],
