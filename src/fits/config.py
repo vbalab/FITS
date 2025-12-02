@@ -10,10 +10,14 @@ _DIR_ROOT = Path(__file__).resolve().parent.parent.parent
 DATA_PATH = _DIR_ROOT / "data/"
 DATASETS_PATH = DATA_PATH / "datasets/"
 MODELS_PATH = DATA_PATH / "models/"
+TRAINING_PATH = MODELS_PATH / "training/"
+EVALUATION_PATH = MODELS_PATH / "evaluation/"
 
 DATA_PATH.mkdir(parents=True, exist_ok=True)
 DATASETS_PATH.mkdir(parents=True, exist_ok=True)
 MODELS_PATH.mkdir(parents=True, exist_ok=True)
+TRAINING_PATH.mkdir(parents=True, exist_ok=True)
+EVALUATION_PATH.mkdir(parents=True, exist_ok=True)
 
 
 class DatasetsPaths(Enum):

@@ -86,7 +86,7 @@ class CSDIAdapter(ForecastingModel):
 
         observed_data = batch.observed_data
         observed_mask = batch.observed_mask
-        gt_mask = batch.horizon_mask
+        gt_mask = batch.forecast_mask
         time_points = batch.time_points
 
         # CSDI expects shape [B, L] for timepoints; ForecastingData stores [B, L, K].

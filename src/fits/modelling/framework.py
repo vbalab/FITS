@@ -13,16 +13,16 @@ from tqdm import tqdm
 from torch.utils.data import DataLoader
 from IPython.display import clear_output
 
-from fits.config import MODELS_PATH
+from fits.config import TRAINING_PATH, EVALUATION_PATH
 from fits.data.dataset import ForecastingData, NormalizationStats
 
 
 @dataclass
 class ForecastedData:
     forecasted_data: torch.Tensor  # [B, nsample, K, L] float
+    forecast_mask: torch.Tensor  # [B, K, L] int
     observed_data: torch.Tensor  # [B, K, L] float
     observed_mask: torch.Tensor  # [B, K, L] int
-    forecast_mask: torch.Tensor  # [B, K, L] int
     time_points: torch.Tensor  # [B, L] float
 
 
@@ -86,7 +86,7 @@ def Train(
     """Generic training loop for :class:`ForecastingModel` implementations."""
 
     current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
-    folder_name = MODELS_PATH / f"{model.model_name}_{current_time}"
+    folder_name = TRAINING_PATH / f"{model.model_name}_{current_time}"
     folder_name.mkdir(parents=True, exist_ok=True)
 
     opt = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=1e-6)
@@ -98,7 +98,7 @@ def Train(
     p2 = int(0.9 * epochs)
     shed = torch.optim.lr_scheduler.MultiStepLR(opt, milestones=[p1, p2], gamma=0.1)
 
-    metrics: dict[str, list[float]] = {"train_loss": [], "test_loss": []}
+    metrics: dict[str, list[tuple[int, float]]] = {"train_loss": [], "test_loss": []}
 
     best_valid_loss = float("inf")
     for epoch_no in range(epochs):
@@ -219,11 +219,8 @@ def CalcQuantileCRPSSum(target, forecast, eval_points, mean_scaler, scaler):
 def Evaluate(
     model: ForecastingModel,
     test_loader: DataLoader,
-    nsample: int = 100,
-    normalization: NormalizationStats | None = None,
-    scaler: float | torch.Tensor = 1,
-    mean_scaler: float | torch.Tensor = 0,
-    foldername: str = "",
+    normalization: NormalizationStats,
+    nsample: int = 10,
 ):
     """Evaluate a :class:`ForecastingModel` and persist generated outputs.
 
@@ -231,65 +228,54 @@ def Evaluate(
     dumps for generated outputs and final metrics) while improving readability
     and bookkeeping.
     """
+    current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+    folder_name = EVALUATION_PATH / f"{model.model_name}_{current_time}"
+    folder_name.mkdir(parents=True, exist_ok=True)
 
     model.eval()
     mse_total = 0.0
     mae_total = 0.0
     evalpoints_total = 0.0
 
-    all_target: list[torch.Tensor] = []
-    all_observed_point: list[torch.Tensor] = []
-    all_observed_time: list[torch.Tensor] = []
-    all_evalpoint: list[torch.Tensor] = []
-    all_generated_samples: list[torch.Tensor] = []
-
-    output_dir = Path(foldername) if foldername else Path.cwd()
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    if normalization is not None:
-        scaler = normalization.std
-        mean_scaler = normalization.mean
-
-    scaler_tensor = torch.as_tensor(scaler)
-    mean_tensor = torch.as_tensor(mean_scaler)
+    all_observed_data: list[torch.Tensor] = []
+    all_observed_mask: list[torch.Tensor] = []
+    all_time_points: list[torch.Tensor] = []
+    all_forecast_mask: list[torch.Tensor] = []
+    all_forecasted_data: list[torch.Tensor] = []
 
     with tqdm(test_loader, mininterval=5.0, maxinterval=50.0) as it:
         for batch_no, test_batch in enumerate(it, start=1):
-            forecasted_data = model.evaluate(test_batch, nsample)
+            forecasted = model.evaluate(test_batch, nsample)
 
-            samples = forecasted_data.forecasted_data
-            c_target = forecasted_data.observed_data
-            eval_points = forecasted_data.forecast_mask
-            observed_points = forecasted_data.observed_mask
-            observed_time = forecasted_data.time_points
+            forecasted_data = forecasted.forecasted_data
+            forecast_mask = forecasted.forecast_mask
+            observed_data = forecasted.observed_data
+            observed_mask = forecasted.observed_mask
+            time_points = forecasted.time_points
 
-            samples = samples.permute(0, 1, 3, 2)  # (B,nsample,L,K)
-            c_target = c_target.permute(0, 2, 1)  # (B,L,K)
-            eval_points = eval_points.permute(0, 2, 1)
-            observed_points = observed_points.permute(0, 2, 1)
+            forecasted_data = forecasted_data.permute(0, 1, 3, 2)  # (B,nsample,L,K)
+            forecast_mask = forecast_mask.permute(0, 2, 1)
+            observed_data = observed_data.permute(0, 2, 1)  # (B,L,K)
+            observed_mask = observed_mask.permute(0, 2, 1)
 
-            scaler_tensor = torch.as_tensor(scaler, device=samples.device)
-            mean_tensor = torch.as_tensor(mean_scaler, device=samples.device)
-            scaler = scaler_tensor
-            mean_scaler = mean_tensor
+            all_observed_data.append(observed_data)
+            all_forecast_mask.append(forecast_mask)
+            all_observed_mask.append(observed_mask)
+            all_time_points.append(time_points)
+            all_forecasted_data.append(forecasted_data)
 
-            samples_median = samples.median(dim=1)
-            all_target.append(c_target)
-            all_evalpoint.append(eval_points)
-            all_observed_point.append(observed_points)
-            all_observed_time.append(observed_time)
-            all_generated_samples.append(samples)
+            forecasted_data_median = forecasted_data.median(dim=1)
 
-            mse_current = (((samples_median.values - c_target) * eval_points) ** 2) * (
+            mse_current = (((forecasted_data_median.values - observed_data) * forecast_mask) ** 2) * (
                 scaler_tensor**2
             )
             mae_current = (
-                torch.abs((samples_median.values - c_target) * eval_points)
+                torch.abs((forecasted_data_median.values - observed_data) * forecast_mask)
             ) * scaler_tensor
 
             mse_total += mse_current.sum().item()
             mae_total += mae_current.sum().item()
-            evalpoints_total += eval_points.sum().item()
+            evalpoints_total += forecast_mask.sum().item()
 
             it.set_postfix(
                 ordered_dict={
@@ -300,14 +286,17 @@ def Evaluate(
                 refresh=True,
             )
 
-    with open(output_dir / f"generated_outputs_nsample{nsample}.pk", "wb") as f:
+    scaler_tensor = torch.as_tensor(normalization.std, device=forecasted_data.device)
+    mean_tensor = torch.as_tensor(normalization.mean, device=forecasted_data.device)
+
+    with open(folder_name / f"generated_outputs_nsample{nsample}.pk", "wb") as f:
         pickle.dump(
             [
-                torch.cat(all_generated_samples, dim=0),
-                torch.cat(all_target, dim=0),
-                torch.cat(all_evalpoint, dim=0),
-                torch.cat(all_observed_point, dim=0),
-                torch.cat(all_observed_time, dim=0),
+                torch.cat(all_forecasted_data, dim=0),
+                torch.cat(all_forecast_mask, dim=0),
+                torch.cat(all_observed_data, dim=0),
+                torch.cat(all_observed_mask, dim=0),
+                torch.cat(all_time_points, dim=0),
                 scaler_tensor.cpu(),
                 mean_tensor.cpu(),
             ],
@@ -315,15 +304,16 @@ def Evaluate(
         )
 
     crps = CalcQuantileCRPS(
-        all_target, all_generated_samples, all_evalpoint, mean_scaler, scaler
+        all_observed_data, all_forecasted_data, all_forecast_mask, mean_tensor, scaler_tensor,
     )
     crps_sum = CalcQuantileCRPSSum(
-        all_target, all_generated_samples, all_evalpoint, mean_scaler, scaler
+        all_observed_data, all_forecasted_data, all_forecast_mask, mean_tensor, scaler_tensor,
     )
 
     rmse = np.sqrt(mse_total / evalpoints_total)
     mae = mae_total / evalpoints_total
-    with open(output_dir / f"result_nsample{nsample}.pk", "wb") as f:
+
+    with open(folder_name / f"result_nsample{nsample}.pk", "wb") as f:
         pickle.dump([rmse, mae, crps], f)
 
     print("RMSE:", rmse)
