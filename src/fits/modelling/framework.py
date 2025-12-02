@@ -280,9 +280,9 @@ def Evaluate(
             all_observed_time.append(observed_time)
             all_generated_samples.append(samples)
 
-            mse_current = (
-                ((samples_median.values - c_target) * eval_points) ** 2
-            ) * (scaler_tensor**2)
+            mse_current = (((samples_median.values - c_target) * eval_points) ** 2) * (
+                scaler_tensor**2
+            )
             mae_current = (
                 torch.abs((samples_median.values - c_target) * eval_points)
             ) * scaler_tensor

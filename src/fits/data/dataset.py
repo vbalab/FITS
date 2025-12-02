@@ -29,7 +29,9 @@ class NormalizationStats:
     mean: torch.Tensor
     std: torch.Tensor
 
-    def as_device(self, device: torch.device, dtype: torch.dtype = torch.float32) -> "NormalizationStats":
+    def as_device(
+        self, device: torch.device, dtype: torch.dtype = torch.float32
+    ) -> "NormalizationStats":
         return NormalizationStats(
             mean=self.mean.to(device=device, dtype=dtype),
             std=self.std.to(device=device, dtype=dtype),
@@ -176,9 +178,9 @@ class DatasetAirQuality(ForecastingDataset):
         feature_count = observed_mask.sum(axis=0)
 
         mean = feature_sum / np.clip(feature_count, a_min=1, a_max=None)
-        variance = (
-            ((observed_values - mean) ** 2) * observed_mask
-        ).sum(axis=0) / np.clip(feature_count, a_min=1, a_max=None)
+        variance = (((observed_values - mean) ** 2) * observed_mask).sum(
+            axis=0
+        ) / np.clip(feature_count, a_min=1, a_max=None)
 
         std = np.sqrt(variance)
         std[std == 0] = 1.0
