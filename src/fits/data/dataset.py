@@ -19,10 +19,10 @@ class ModelMode(Enum):
 @dataclass
 class ForecastingData:
     observed_data: torch.Tensor  # [T, K] float
-    observed_mask: torch.Tensor  # [T, K] int
+    observed_mask: torch.Tensor  # [T, K] int       <- mask: do we have data or not
+    horizon_mask: torch.Tensor  # [T, K] int        <- mask: is it in the horizon or not
     time_points: torch.Tensor  # [T, K] float
     feature_ids: torch.Tensor  # [T, K] float
-    conditioning_mask: torch.Tensor | None = None  # [T, K] int
 
 
 @dataclass
@@ -146,8 +146,8 @@ class DatasetAirQuality(ForecastingDataset):
         end_idx = start_idx + self.seq_len
 
         window_mask = self.mask[start_idx:end_idx]
-        conditioning_mask = window_mask.clone()
-        conditioning_mask[-self.horizon :] = 0
+        horizon_mask = window_mask.clone()
+        horizon_mask[-self.horizon :] = 0
 
         window_data = self.data[start_idx:end_idx]
         window_data = self._normalize(window_data)
@@ -156,9 +156,9 @@ class DatasetAirQuality(ForecastingDataset):
         return ForecastingData(
             observed_data=observed_data,
             observed_mask=window_mask,
+            horizon_mask=horizon_mask,
             time_points=self.time_points,
             feature_ids=self.feature_ids,
-            conditioning_mask=conditioning_mask,
         )
 
     def __len__(self) -> int:

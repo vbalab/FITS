@@ -1,5 +1,3 @@
-# mypy: ignore-errors
-
 from dataclasses import asdict, dataclass, field
 from typing import Literal
 
@@ -88,16 +86,12 @@ class CSDIAdapter(ForecastingModel):
 
         observed_data = batch.observed_data
         observed_mask = batch.observed_mask
-        conditioning_mask = (
-            batch.conditioning_mask if batch.conditioning_mask is not None else observed_mask
-        )
+        gt_mask = batch.horizon_mask
         time_points = batch.time_points
 
         # CSDI expects shape [B, L] for timepoints; ForecastingData stores [B, L, K].
         if time_points.dim() == 3:
             time_points = time_points[..., 0]
-
-        gt_mask = conditioning_mask
 
         return {
             "observed_data": observed_data.to(dtype=torch.float32, device=self.device),
