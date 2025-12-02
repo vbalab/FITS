@@ -20,8 +20,8 @@ class DiffusionTSConfig(ModelConfig):
     n_layer_enc: int = 3
     n_layer_dec: int = 6
     d_model: int | None = None
-    timesteps: int = 1000
-    sampling_timesteps: int = 250
+    timesteps: int = 100
+    sampling_timesteps: int = 100
     loss_type: Literal["l1", "l2"] = "l1"
     beta_schedule: Literal["linear", "cosine"] = "cosine"
     n_heads: int = 4
@@ -67,11 +67,11 @@ class DiffusionTSAdapter(ForecastingModel):
         self.config: DiffusionTSConfig = config
         self.diffusion = Diffusion_TS(**config.diffusion_kwargs()).to(self.device)
 
-    def forward(self, batch: ForecastingData, is_train: int = 1):  # type: ignore[override]
+    def forward(self, batch: ForecastingData):
         diffusion_batch, padding_mask = self._adapt_batch(batch)
         return self.diffusion(diffusion_batch, padding_masks=padding_mask)
 
-    def evaluate(self, batch: ForecastingData, n_samples: int) -> ForecastedData:  # type: ignore[override]
+    def evaluate(self, batch: ForecastingData, n_samples: int) -> ForecastedData:
         self.eval()
 
         with torch.no_grad():

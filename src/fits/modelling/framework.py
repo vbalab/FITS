@@ -65,7 +65,7 @@ class ForecastingModel(nn.Module, ABC):
         return self
 
     @abstractmethod
-    def forward(self, batch: ForecastingData, is_train: int = 1):
+    def forward(self, batch: ForecastingData):
         """Compute the training loss for a batch."""
 
     @abstractmethod

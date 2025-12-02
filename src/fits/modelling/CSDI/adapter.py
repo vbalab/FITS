@@ -17,8 +17,8 @@ class CSDIDiffusionConfig:
     nheads: int = 8
     diffusion_embedding_dim: int = 128
     beta_start: float = 0.0001
-    beta_end: float = 0.5
-    num_steps: int = 50
+    beta_end: float = 0.1
+    num_steps: int = 100
     schedule: Literal["quad", "linear"] = "quad"
 
 
@@ -60,10 +60,10 @@ class CSDIAdapter(ForecastingModel):
             target_dim=self.target_dim,
         ).to(self.device)
 
-    def forward(self, batch: ForecastingData, is_train: int = 1):
+    def forward(self, batch: ForecastingData):
         csdi_batch = self._adapt_batch(batch)
         self._validate_batch_dimensions(csdi_batch)
-        return self.csdi_model(csdi_batch, is_train=is_train)
+        return self.csdi_model(csdi_batch, is_train=1)
 
     def evaluate(self, batch: ForecastingData, n_samples: int) -> ForecastedData:
         csdi_batch = self._adapt_batch(batch)
