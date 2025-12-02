@@ -3,8 +3,7 @@ import torch
 import torch.nn.functional as F
 
 from torch import nn
-from Models.interpretable_diffusion.model_utils import LearnablePositionalEncoding, Conv_MLP,\
-                                                       AdaLayerNorm, GELU2
+from .model_utils import AdaLayerNorm, Conv_MLP, GELU2, LearnablePositionalEncoding
 
 
 class GroupNorm32(nn.GroupNorm):
