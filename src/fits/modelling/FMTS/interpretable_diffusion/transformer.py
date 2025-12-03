@@ -1,13 +1,21 @@
 import math
-import torch
-import numpy as np
-import torch.nn.functional as F
-
-from torch import nn
-from einops import rearrange, reduce, repeat
-from Models.interpretable_diffusion.model_utils import LearnablePositionalEncoding, Conv_MLP,\
-                                                       AdaLayerNorm, Transpose, RMSNorm, GELU2, series_decomp
 import os
+
+import numpy as np
+import torch
+import torch.nn.functional as F
+from einops import rearrange, reduce, repeat
+from torch import nn
+
+from fits.modelling.FMTS.interpretable_diffusion.model_utils import (
+    AdaLayerNorm,
+    Conv_MLP,
+    GELU2,
+    LearnablePositionalEncoding,
+    RMSNorm,
+    Transpose,
+    series_decomp,
+)
 
 ## hunote: our backbone network is most same as diffusion-TS. Diffusion-TS backbone has really good potential!!
 class TrendBlock(nn.Module):

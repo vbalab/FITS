@@ -1,11 +1,13 @@
 import math
+import os
+
 import torch
 import torch.nn.functional as F
-from torch import nn
 from einops import reduce
+from torch import nn
 from tqdm.auto import tqdm
-from Models.interpretable_diffusion.transformer import Transformer
-import os
+
+from fits.modelling.FMTS.interpretable_diffusion.transformer import Transformer
 
 
 
