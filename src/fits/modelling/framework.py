@@ -249,7 +249,9 @@ def Evaluate(
         for batch_no, test_batch in enumerate(it, start=1):
             forecasted = model.evaluate(test_batch, nsample)
 
-            forecasted_data = forecasted.forecasted_data.permute(0, 1, 3, 2)  # (B,nsample,L,K)
+            forecasted_data = forecasted.forecasted_data.permute(
+                0, 1, 3, 2
+            )  # (B,nsample,L,K)
             forecast_mask = forecasted.forecast_mask.permute(0, 2, 1)
             observed_data = forecasted.observed_data.permute(0, 2, 1)  # (B,L,K)
             observed_mask = forecasted.observed_mask.permute(0, 2, 1)
@@ -263,11 +265,13 @@ def Evaluate(
 
             forecasted_data_median = forecasted_data.median(dim=1)
 
-            mse_current = (((forecasted_data_median.values - observed_data) * forecast_mask) ** 2) * (
-                scaler_tensor**2
-            )
+            mse_current = (
+                ((forecasted_data_median.values - observed_data) * forecast_mask) ** 2
+            ) * (scaler_tensor**2)
             mae_current = (
-                torch.abs((forecasted_data_median.values - observed_data) * forecast_mask)
+                torch.abs(
+                    (forecasted_data_median.values - observed_data) * forecast_mask
+                )
             ) * scaler_tensor
 
             mse_total += mse_current.sum().item()
@@ -278,7 +282,7 @@ def Evaluate(
                 ordered_dict={
                     "rmse_total": np.sqrt(mse_total / evalpoints_total),
                     "mae_total": mae_total / evalpoints_total,
-                "batch_no": batch_no,
+                    "batch_no": batch_no,
                 },
                 refresh=True,
             )

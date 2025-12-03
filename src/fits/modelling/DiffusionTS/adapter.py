@@ -96,13 +96,19 @@ class DiffusionTSAdapter(ForecastingModel):
                     )
                 else:
                     generated = self.diffusion.sample_infill(
-                        shape=(batch_size, self.config.seq_len, self.config.feature_size),
+                        shape=(
+                            batch_size,
+                            self.config.seq_len,
+                            self.config.feature_size,
+                        ),
                         target=diffusion_batch,
                         partial_mask=partial_mask,
                         model_kwargs=model_kwargs,
                     )
 
-                generated = generated.to(diffusion_batch.device, dtype=diffusion_batch.dtype)
+                generated = generated.to(
+                    diffusion_batch.device, dtype=diffusion_batch.dtype
+                )
 
                 if padding_mask is not None:
                     generated[padding_mask] = diffusion_batch[padding_mask]
@@ -110,7 +116,9 @@ class DiffusionTSAdapter(ForecastingModel):
                 samples.append(generated)
 
             stacked = torch.stack(samples, dim=1)  # (B, nsample, L, K)
-            forecast_mask = (~batch.forecast_mask.bool()).permute(0, 2, 1).to(self.device)
+            forecast_mask = (
+                (~batch.forecast_mask.bool()).permute(0, 2, 1).to(self.device)
+            )
 
             observed_data = batch.observed_data.to(self.device).permute(0, 2, 1)
             observed_mask = batch.observed_mask.to(self.device).permute(0, 2, 1)
@@ -123,7 +131,9 @@ class DiffusionTSAdapter(ForecastingModel):
                 time_points=batch.time_points.to(self.device),
             )
 
-    def _adapt_batch(self, batch: ForecastingData) -> tuple[torch.Tensor, torch.Tensor | None]:
+    def _adapt_batch(
+        self, batch: ForecastingData
+    ) -> tuple[torch.Tensor, torch.Tensor | None]:
         assert isinstance(batch, ForecastingData)
 
         observed_data = batch.observed_data.to(dtype=torch.float32, device=self.device)
@@ -131,4 +141,3 @@ class DiffusionTSAdapter(ForecastingModel):
         if batch.observed_mask is not None:
             padding_mask = batch.observed_mask.bool().all(dim=-1)
         return observed_data, padding_mask
-

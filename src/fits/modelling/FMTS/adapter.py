@@ -66,7 +66,9 @@ class FMTSAdapter(ForecastingModel):
                     target=diffusion_batch,
                     partial_mask=partial_mask,
                 )
-                generated = generated.to(diffusion_batch.device, dtype=diffusion_batch.dtype)
+                generated = generated.to(
+                    diffusion_batch.device, dtype=diffusion_batch.dtype
+                )
 
                 if batch.observed_mask is not None:
                     padding_mask = batch.observed_mask.bool().all(dim=-1)
@@ -75,7 +77,9 @@ class FMTSAdapter(ForecastingModel):
                 samples.append(generated)
 
             stacked = torch.stack(samples, dim=1)  # (B, nsample, L, K)
-            forecast_mask = (~batch.forecast_mask.bool()).permute(0, 2, 1).to(self.device)
+            forecast_mask = (
+                (~batch.forecast_mask.bool()).permute(0, 2, 1).to(self.device)
+            )
 
             observed_data = batch.observed_data.to(self.device).permute(0, 2, 1)
             observed_mask = batch.observed_mask.to(self.device).permute(0, 2, 1)

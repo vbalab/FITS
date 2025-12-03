@@ -61,9 +61,10 @@ class QKVAttention(nn.Module):
             (k * scale).view(bs * self.n_heads, ch, length),
         )  # More stable with f16 than dividing afterwards
         weight = torch.softmax(weight.float(), dim=-1).type(weight.dtype)
-        a = torch.einsum("bts,bcs->bct", weight, v.reshape(bs * self.n_heads, ch, length))
+        a = torch.einsum(
+            "bts,bcs->bct", weight, v.reshape(bs * self.n_heads, ch, length)
+        )
         return a.reshape(bs, -1, length)
-
 
 
 class AttentionPool2d(nn.Module):
@@ -94,11 +95,12 @@ class AttentionPool2d(nn.Module):
 
 
 class FullAttention(nn.Module):
-    def __init__(self,
-                 n_embd, # the embed dim
-                 n_head, # the number of heads
-                 attn_pdrop=0.1, # attention dropout prob
-                 resid_pdrop=0.1, # residual attention dropout prob
+    def __init__(
+        self,
+        n_embd,  # the embed dim
+        n_head,  # the number of heads
+        attn_pdrop=0.1,  # attention dropout prob
+        resid_pdrop=0.1,  # residual attention dropout prob
     ):
         super().__init__()
         assert n_embd % n_head == 0
@@ -116,57 +118,67 @@ class FullAttention(nn.Module):
 
     def forward(self, x, mask=None):
         B, T, C = x.size()
-        k = self.key(x).view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
-        q = self.query(x).view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
-        v = self.value(x).view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
-        att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1))) # (B, nh, T, T)
+        k = (
+            self.key(x).view(B, T, self.n_head, C // self.n_head).transpose(1, 2)
+        )  # (B, nh, T, hs)
+        q = (
+            self.query(x).view(B, T, self.n_head, C // self.n_head).transpose(1, 2)
+        )  # (B, nh, T, hs)
+        v = (
+            self.value(x).view(B, T, self.n_head, C // self.n_head).transpose(1, 2)
+        )  # (B, nh, T, hs)
+        att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))  # (B, nh, T, T)
 
-        att = F.softmax(att, dim=-1) # (B, nh, T, T)
+        att = F.softmax(att, dim=-1)  # (B, nh, T, T)
         att = self.attn_drop(att)
-        y = att @ v # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
-        y = y.transpose(1, 2).contiguous().view(B, T, C) # re-assemble all head outputs side by side, (B, T, C)
-        att = att.mean(dim=1, keepdim=False) # (B, T, T)
+        y = att @ v  # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
+        y = (
+            y.transpose(1, 2).contiguous().view(B, T, C)
+        )  # re-assemble all head outputs side by side, (B, T, C)
+        att = att.mean(dim=1, keepdim=False)  # (B, T, T)
 
         # output projection
         y = self.resid_drop(self.proj(y))
         return y, att
-    
+
 
 class EncoderBlock(nn.Module):
-    """ an unassuming Transformer block """
-    def __init__(self,
-                 n_embd=1024,
-                 n_head=16,
-                 attn_pdrop=0.1,
-                 resid_pdrop=0.1,
-                 mlp_hidden_times=4,
-                 activate='GELU'
-                 ):
+    """an unassuming Transformer block"""
+
+    def __init__(
+        self,
+        n_embd=1024,
+        n_head=16,
+        attn_pdrop=0.1,
+        resid_pdrop=0.1,
+        mlp_hidden_times=4,
+        activate="GELU",
+    ):
         super().__init__()
 
         self.ln1 = AdaLayerNorm(n_embd)
         self.ln2 = nn.LayerNorm(n_embd)
         self.attn = FullAttention(
-                n_embd=n_embd,
-                n_head=n_head,
-                attn_pdrop=attn_pdrop,
-                resid_pdrop=resid_pdrop,
-            )
-        
-        assert activate in ['GELU', 'GELU2']
-        act = nn.GELU() if activate == 'GELU' else GELU2()
+            n_embd=n_embd,
+            n_head=n_head,
+            attn_pdrop=attn_pdrop,
+            resid_pdrop=resid_pdrop,
+        )
+
+        assert activate in ["GELU", "GELU2"]
+        act = nn.GELU() if activate == "GELU" else GELU2()
 
         self.mlp = nn.Sequential(
-                nn.Linear(n_embd, mlp_hidden_times * n_embd),
-                act,
-                nn.Linear(mlp_hidden_times * n_embd, n_embd),
-                nn.Dropout(resid_pdrop),
-            )
-        
+            nn.Linear(n_embd, mlp_hidden_times * n_embd),
+            act,
+            nn.Linear(mlp_hidden_times * n_embd, n_embd),
+            nn.Dropout(resid_pdrop),
+        )
+
     def forward(self, x, timestep, mask=None, label_emb=None):
         a, att = self.attn(self.ln1(x, timestep, label_emb), mask=mask)
         x = x + a
-        x = x + self.mlp(self.ln2(x))   # only one really use encoder_output
+        x = x + self.mlp(self.ln2(x))  # only one really use encoder_output
         return x, att
 
 
@@ -176,21 +188,26 @@ class Encoder(nn.Module):
         n_layer=14,
         n_embd=1024,
         n_head=16,
-        attn_pdrop=0.,
-        resid_pdrop=0.,
+        attn_pdrop=0.0,
+        resid_pdrop=0.0,
         mlp_hidden_times=4,
-        block_activate='GELU',
+        block_activate="GELU",
     ):
         super().__init__()
 
-        self.blocks = nn.Sequential(*[EncoderBlock(
-                n_embd=n_embd,
-                n_head=n_head,
-                attn_pdrop=attn_pdrop,
-                resid_pdrop=resid_pdrop,
-                mlp_hidden_times=mlp_hidden_times,
-                activate=block_activate,
-        ) for _ in range(n_layer)])
+        self.blocks = nn.Sequential(
+            *[
+                EncoderBlock(
+                    n_embd=n_embd,
+                    n_head=n_head,
+                    attn_pdrop=attn_pdrop,
+                    resid_pdrop=resid_pdrop,
+                    mlp_hidden_times=mlp_hidden_times,
+                    activate=block_activate,
+                )
+                for _ in range(n_layer)
+            ]
+        )
 
     def forward(self, input, t, padding_masks=None, label_emb=None):
         x = input
@@ -211,23 +228,31 @@ class Classifier(nn.Module):
         attn_pdrop=0.1,
         resid_pdrop=0.1,
         mlp_hidden_times=4,
-        block_activate='GELU',
+        block_activate="GELU",
         max_len=2048,
         num_head_channels=8,
-        **kwargs
+        **kwargs,
     ):
         super().__init__()
         self.emb = Conv_MLP(feature_size, n_embd, resid_pdrop=resid_pdrop)
-        self.encoder = Encoder(n_layer_enc, n_embd, n_heads, attn_pdrop, resid_pdrop, mlp_hidden_times, block_activate)
-        self.pos_enc = LearnablePositionalEncoding(n_embd, dropout=resid_pdrop, max_len=max_len)
+        self.encoder = Encoder(
+            n_layer_enc,
+            n_embd,
+            n_heads,
+            attn_pdrop,
+            resid_pdrop,
+            mlp_hidden_times,
+            block_activate,
+        )
+        self.pos_enc = LearnablePositionalEncoding(
+            n_embd, dropout=resid_pdrop, max_len=max_len
+        )
 
         assert num_head_channels != -1
         self.out = nn.Sequential(
             normalization(seq_length),
             nn.SiLU(),
-            AttentionPool2d(
-                seq_length, num_head_channels, num_classes
-            ),
+            AttentionPool2d(seq_length, num_head_channels, num_classes),
         )
 
     def forward(self, input, t, padding_masks=None):
@@ -238,18 +263,22 @@ class Classifier(nn.Module):
         return self.out(output)
 
 
-if __name__ == '__main__':
-    device = torch.device('cuda:0')
+if __name__ == "__main__":
+    device = torch.device("cuda:0")
     input = torch.randn(128, 64, 14).to(device)
-    t = torch.randint(0, 1000, (128, ), device=device)
+    t = torch.randint(0, 1000, (128,), device=device)
 
     def count_model_parameters(model):
         total_params = sum(p.numel() for p in model.parameters())
         trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
         total_size_mb = total_params * 4 / (1024 * 1024)  # assuming float32
         trainable_size_mb = trainable_params * 4 / (1024 * 1024)
-        return {'Total Parameters': total_params, 'Trainable Parameters': trainable_params, 
-                'Total Size (MB)': total_size_mb, 'Trainable Size (MB)': trainable_size_mb}
+        return {
+            "Total Parameters": total_params,
+            "Trainable Parameters": trainable_params,
+            "Total Size (MB)": total_size_mb,
+            "Trainable Size (MB)": trainable_size_mb,
+        }
 
     model = Classifier(
         feature_size=14,
@@ -258,10 +287,10 @@ if __name__ == '__main__':
         num_classes=2,
         n_embd=64,
         n_heads=4,
-        attn_pdrop=0.,
-        resid_pdrop=0.,
+        attn_pdrop=0.0,
+        resid_pdrop=0.0,
         mlp_hidden_times=4,
-        block_activate='GELU',
+        block_activate="GELU",
         max_len=64,
     ).to(device)
     print(count_model_parameters(model))
