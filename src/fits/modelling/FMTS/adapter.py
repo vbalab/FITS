@@ -14,8 +14,8 @@ class FMTSConfig(ModelConfig):
     seq_len: int = 48
     feature_size: int = 36
     n_layer_enc: int = 3
-    n_layer_dec: int = 6
-    d_model: int | None = None
+    n_layer_dec: int = 4
+    d_model: int = 64
     n_heads: int = 4
     mlp_hidden_times: int = 4
     attn_pd: float = 0.0

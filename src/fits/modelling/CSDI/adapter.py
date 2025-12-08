@@ -12,8 +12,8 @@ from fits.data.dataset import ForecastingData
 class CSDIDiffusionConfig:
     """Typed configuration for the diffusion backbone inside CSDI."""
 
-    layers: int = 4
-    channels: int = 64
+    layers: int = 7
+    channels: int = 64  # d_model
     nheads: int = 8
     diffusion_embedding_dim: int = 128
     beta_start: float = 0.0001
@@ -31,7 +31,7 @@ class CSDIConfig(ModelConfig):
     feature_embedding_dim: int = 16
     is_unconditional: bool = False
     target_strategy: Literal["mix", "random", "historical"] = "mix"
-    num_sample_features: int = 64
+    num_sample_features: int = 64   # > 36 -> no feature sampling
     diffusion: CSDIDiffusionConfig = field(default_factory=CSDIDiffusionConfig)
 
     def as_csdi_dict(self) -> dict:

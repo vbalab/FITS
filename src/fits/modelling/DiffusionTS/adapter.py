@@ -18,8 +18,8 @@ class DiffusionTSConfig(ModelConfig):
     horizon: int = 6
     feature_size: int = 36
     n_layer_enc: int = 3
-    n_layer_dec: int = 6
-    d_model: int | None = None
+    n_layer_dec: int = 5
+    d_model: int = 64
     timesteps: int = 100
     sampling_timesteps: int = 100
     loss_type: Literal["l1", "l2"] = "l1"
