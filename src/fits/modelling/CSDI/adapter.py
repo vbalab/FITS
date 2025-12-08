@@ -5,14 +5,14 @@ import torch
 
 from fits.modelling.CSDI.model import CSDI_Forecasting
 from fits.modelling.framework import ForecastedData, ForecastingModel, ModelConfig
-from fits.data.dataset import ForecastingData
+from fits.dataframes.dataset import ForecastingData
 
 
 @dataclass
 class CSDIDiffusionConfig:
     """Typed configuration for the diffusion backbone inside CSDI."""
 
-    layers: int = 7
+    layers: int = 6
     channels: int = 64  # d_model
     nheads: int = 8
     diffusion_embedding_dim: int = 128
@@ -31,7 +31,7 @@ class CSDIConfig(ModelConfig):
     feature_embedding_dim: int = 16
     is_unconditional: bool = False
     target_strategy: Literal["mix", "random", "historical"] = "mix"
-    num_sample_features: int = 64   # > 36 -> no feature sampling
+    num_sample_features: int = 64  # > 36 -> no feature sampling
     diffusion: CSDIDiffusionConfig = field(default_factory=CSDIDiffusionConfig)
 
     def as_csdi_dict(self) -> dict:

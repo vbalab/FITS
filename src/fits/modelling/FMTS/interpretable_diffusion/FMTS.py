@@ -125,12 +125,14 @@ class FM_TS(nn.Module):
         assert n == feature_size, f"number of variable must be {feature_size}"
         return self._train_loss(x_start=x)
 
-    def fast_sample_infill(self, shape, target, partial_mask=None, hucfg_Kscale: float = 0.03):
+    def fast_sample_infill(
+        self, shape, target, partial_mask=None, hucfg_Kscale: float = 0.03
+    ):
         z0 = torch.randn(shape).cuda()
         z1 = zt = z0
         for t in range(self.num_timesteps):
             t = t / self.num_timesteps  ## scale to 0-1
-            t = t ** hucfg_Kscale  ## perform t-power sampling
+            t = t**hucfg_Kscale  ## perform t-power sampling
 
             z0 = torch.randn(shape).cuda()  ## re init the z0
 

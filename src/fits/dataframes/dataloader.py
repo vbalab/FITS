@@ -3,7 +3,7 @@ from typing import Any
 import torch
 from torch.utils.data import DataLoader
 
-from fits.data.dataset import ForecastingData, ForecastingDataset, ModelMode
+from fits.dataframes.dataset import ForecastingData, ForecastingDataset, ModelMode
 
 
 def _collate_forecasting_data(batch: list[ForecastingData]) -> ForecastingData:

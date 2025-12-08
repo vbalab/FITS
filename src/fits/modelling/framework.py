@@ -13,7 +13,7 @@ from torch.utils.data import DataLoader
 from IPython.display import clear_output
 
 from fits.config import TRAINING_PATH, EVALUATION_PATH
-from fits.data.dataset import ForecastingData, NormalizationStats
+from fits.dataframes.dataset import ForecastingData, NormalizationStats
 
 
 @dataclass
@@ -79,7 +79,7 @@ def Train(
     valid_loader: DataLoader,
     lr: float = 1.0e-3,
     epochs: int = 200,
-    valid_epoch_interval: int = 10,
+    valid_epoch_interval: int = 40,
     verbose: bool = True,
 ):
     """Generic training loop for :class:`ForecastingModel` implementations."""

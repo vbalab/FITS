@@ -46,8 +46,8 @@ class ForecastingDataset(Dataset[ForecastingData], ABC):
         seq_len: int,  # T
         horizon: int,  # last H observations to forecast
         dim: int,  # K
-        train_share: float = 0.7,
-        validation_share: float = 0.15,
+        train_share: float = 0.75,
+        validation_share: float = 0.1,
     ) -> None:
         assert horizon < seq_len, f"Horizon={horizon} >= seq_len={seq_len}"
         assert train_share + validation_share <= 1, "Incorrect train/validation shares"
@@ -72,8 +72,8 @@ class DatasetAirQuality(ForecastingDataset):
         mode: ModelMode,
         seq_len: int = 48,
         horizon: int = 6,
-        train_share: float = 0.7,
-        validation_share: float = 0.15,
+        train_share: float = 0.75,
+        validation_share: float = 0.1,
         normalization: bool = True,
         normalization_stats: NormalizationStats | None = None,
     ) -> None:

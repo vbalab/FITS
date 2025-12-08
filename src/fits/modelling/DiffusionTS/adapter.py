@@ -3,8 +3,8 @@ from typing import Literal
 
 import torch
 
+from fits.dataframes.dataset import ForecastingData
 from fits.modelling.framework import ForecastedData, ForecastingModel, ModelConfig
-from fits.data.dataset import ForecastingData
 from fits.modelling.DiffusionTS.interpretable_diffusion.gaussian_diffusion import (
     Diffusion_TS,
 )
@@ -18,7 +18,7 @@ class DiffusionTSConfig(ModelConfig):
     horizon: int = 6
     feature_size: int = 36
     n_layer_enc: int = 3
-    n_layer_dec: int = 5
+    n_layer_dec: int = 4
     d_model: int = 64
     timesteps: int = 100
     sampling_timesteps: int = 100

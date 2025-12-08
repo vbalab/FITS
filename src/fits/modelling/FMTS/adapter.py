@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 import torch
 
-from fits.data.dataset import ForecastingData
+from fits.dataframes.dataset import ForecastingData
 from fits.modelling.FMTS.interpretable_diffusion.FMTS import FM_TS
 from fits.modelling.framework import ForecastedData, ForecastingModel, ModelConfig
 
@@ -13,11 +13,11 @@ class FMTSConfig(ModelConfig):
 
     seq_len: int = 48
     feature_size: int = 36
-    n_layer_enc: int = 3
+    n_layer_enc: int = 2
     n_layer_dec: int = 4
     d_model: int = 64
     n_heads: int = 4
-    mlp_hidden_times: int = 4
+    mlp_hidden_times: int = 3
     attn_pd: float = 0.0
     resid_pd: float = 0.0
     kernel_size: int | None = None
