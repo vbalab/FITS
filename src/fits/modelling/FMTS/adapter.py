@@ -84,12 +84,16 @@ class FMTSAdapter(ForecastingModel):
             observed_data = batch.observed_data.to(self.device).permute(0, 2, 1)
             observed_mask = batch.observed_mask.to(self.device).permute(0, 2, 1)
 
+            time_points = batch.time_points.to(self.device)
+            if time_points.dim() == 3:
+                time_points = time_points[..., 0]
+
             return ForecastedData(
                 forecasted_data=stacked.permute(0, 1, 3, 2),
                 forecast_mask=forecast_mask,
                 observed_data=observed_data,
                 observed_mask=observed_mask,
-                time_points=batch.time_points.to(self.device),
+                time_points=time_points,
             )
 
     def _adapt_batch(self, batch: ForecastingData) -> torch.Tensor:
