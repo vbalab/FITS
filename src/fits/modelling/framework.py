@@ -199,7 +199,11 @@ def CalcQuantileCRPS(target, forecast, eval_points, mean_scaler, scaler):
 
 def CalcQuantileCRPSSum(target, forecast, eval_points, mean_scaler, scaler):
 
-    eval_points = eval_points.mean(-1)
+    # Ensure the evaluation mask participates in floating point operations.
+    # Some models (e.g., DiffusionTSAdapter) surface boolean masks, causing
+    # ``mean`` to fail because it cannot infer a floating output dtype from
+    # booleans.  Cast explicitly to float before reducing.
+    eval_points = eval_points.float().mean(-1)
     target = target * scaler + mean_scaler
     target = target.sum(-1)
     forecast = forecast * scaler + mean_scaler
