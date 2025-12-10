@@ -117,8 +117,9 @@ class DiffusionTSAdapter(ForecastingModel):
 
             stacked = torch.stack(samples, dim=1)  # (B, nsample, L, K)
             forecast_mask = (
-                (~batch.forecast_mask.bool()).permute(0, 2, 1).to(self.device)
-            )
+                batch.observed_mask
+                * (1 - batch.forecast_mask)
+            ).to(self.device).permute(0, 2, 1)
 
             observed_data = batch.observed_data.to(self.device).permute(0, 2, 1)
             observed_mask = batch.observed_mask.to(self.device).permute(0, 2, 1)
