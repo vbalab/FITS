@@ -257,12 +257,6 @@ def Evaluate(
             observed_mask = forecasted.observed_mask.permute(0, 2, 1)
             time_points = forecasted.time_points
 
-            # Some adapters return per-feature time grids; standardize to [B, L]
-            # so downstream consumers (pickle dumps + visualization helpers) have
-            # a consistent shape regardless of the model.
-            if time_points.dim() == 3:
-                time_points = time_points[..., 0]
-
             all_forecasted_data.append(forecasted_data)
             all_forecast_mask.append(forecast_mask)
             all_observed_data.append(observed_data)
