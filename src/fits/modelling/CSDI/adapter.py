@@ -67,12 +67,10 @@ class CSDIAdapter(ForecastingModel):
             is_train = 0
 
         csdi_batch = self._adapt_batch(batch)
-        self._validate_batch_dimensions(csdi_batch)
         return self.csdi_model(csdi_batch, is_train=is_train)
 
     def evaluate(self, batch: ForecastingData, n_samples: int) -> ForecastedData:
         csdi_batch = self._adapt_batch(batch)
-        self._validate_batch_dimensions(csdi_batch)
         samples, observed_data, target_mask, observed_mask, time_points = (
             self.csdi_model.evaluate(csdi_batch, n_samples)
         )
@@ -81,7 +79,7 @@ class CSDIAdapter(ForecastingModel):
             forecasted_data=samples,
             observed_data=observed_data,
             observed_mask=observed_mask,
-            forecast_mask=target_mask,
+            forecast_mask=batch.forecast_mask,
             time_points=time_points,
         )
 
@@ -91,7 +89,9 @@ class CSDIAdapter(ForecastingModel):
 
         observed_data = batch.observed_data
         observed_mask = batch.observed_mask
-        gt_mask = batch.forecast_mask
+        gt_mask = 1 - batch.forecast_mask
+        # 0 - to be generated
+        # 1 - known at generation
         time_points = batch.time_points
 
         # CSDI expects shape [B, L] for timepoints; ForecastingData stores [B, L, K].
@@ -104,14 +104,3 @@ class CSDIAdapter(ForecastingModel):
             "timepoints": time_points.to(dtype=torch.float32, device=self.device),
             "gt_mask": gt_mask.to(dtype=torch.float32, device=self.device),
         }
-
-    def _validate_batch_dimensions(self, batch: dict) -> None:
-        """Ensure the batch feature dimension matches the configured target dimension."""
-
-        observed_data = batch["observed_data"]
-        if observed_data.shape[-1] != self.target_dim:
-            raise ValueError(
-                "Observed feature dimension does not match CSDI configuration: "
-                f"got {observed_data.shape[-1]}, expected {self.target_dim}. "
-                "Set `CSDIConfig.target_dim` to the number of features in your dataset."
-            )

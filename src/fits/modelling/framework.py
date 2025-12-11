@@ -20,8 +20,12 @@ from fits.dataframes.dataset import ForecastingData, NormalizationStats
 class ForecastedData:
     forecasted_data: torch.Tensor  # [B, nsample, K, L] float
     forecast_mask: torch.Tensor  # [B, K, L] int
+    # 0 - context (history)
+    # 1 - horizon to forecast (to be generated)
     observed_data: torch.Tensor  # [B, K, L] float
     observed_mask: torch.Tensor  # [B, K, L] int
+    # 0 - not observed
+    # 1 - observed (ground truth)
     time_points: torch.Tensor  # [B, L] float
 
 
@@ -35,7 +39,6 @@ class ModelConfig:
     """
 
     name: Optional[str] = None
-    device: Optional[torch.device | str] = None
 
 
 class ForecastingModel(nn.Module, ABC):
@@ -44,25 +47,15 @@ class ForecastingModel(nn.Module, ABC):
     def __init__(self, config: ModelConfig):
         super().__init__()
         self.config = config
-        self.device = self._resolve_device(config.device)
+
+        if not torch.cuda.is_available():
+            raise ValueError("CUDA is not available")
+
+        self.device = torch.device("cuda")
 
     @property
     def model_name(self) -> str:
         return self.config.name or self.__class__.__name__
-
-    def _resolve_device(self, device: Optional[torch.device | str]) -> torch.device:
-        if device is None:
-            return torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        return torch.device(device)
-
-    def to(self, *args, **kwargs):  # type: ignore[override]
-        super().to(*args, **kwargs)
-        # Keep a reference to the current device for adapters using it internally.
-        if args:
-            self.device = torch.device(args[0])
-        elif "device" in kwargs:
-            self.device = torch.device(kwargs["device"])
-        return self
 
     @abstractmethod
     def forward(self, batch: ForecastingData):

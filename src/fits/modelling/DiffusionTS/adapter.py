@@ -77,7 +77,16 @@ class DiffusionTSAdapter(ForecastingModel):
         with torch.no_grad():
             diffusion_batch, padding_mask = self._adapt_batch(batch)
             batch_size = diffusion_batch.size(0)
-            partial_mask = batch.forecast_mask.to(self.device).bool()
+
+            partial_mask = (
+                (batch.observed_mask * (1 - batch.forecast_mask)).to(self.device).bool()
+            )
+            # 0 - to be generated
+            # 1 - known at generation
+
+            forecast_mask = batch.forecast_mask.to(self.device).permute(
+                0, 2, 1
+            )  # [B, K, L]
 
             model_kwargs = {
                 "coef": self.config.langevin_coef,
@@ -115,11 +124,7 @@ class DiffusionTSAdapter(ForecastingModel):
 
                 samples.append(generated)
 
-            stacked = torch.stack(samples, dim=1)  # (B, nsample, L, K)
-            forecast_mask = (
-                batch.observed_mask
-                * (1 - batch.forecast_mask)
-            ).to(self.device).permute(0, 2, 1)
+            stacked = torch.stack(samples, dim=1)
 
             observed_data = batch.observed_data.to(self.device).permute(0, 2, 1)
             observed_mask = batch.observed_mask.to(self.device).permute(0, 2, 1)
@@ -142,11 +147,6 @@ class DiffusionTSAdapter(ForecastingModel):
         assert isinstance(batch, ForecastingData)
 
         observed_data = batch.observed_data.to(dtype=torch.float32, device=self.device)
-        padding_mask = None
-        if batch.observed_mask is not None:
-            # Mark timesteps where *no* features are observed so we can keep the
-            # padding intact after sampling. Using ``all`` would treat fully
-            # observed timesteps as padding, forcing the generated sequence to
-            # exactly match the input and breaking evaluation visualizations.
-            padding_mask = ~batch.observed_mask.bool().any(dim=-1)
+        padding_mask = ~batch.observed_mask.bool().any(dim=-1)
+
         return observed_data, padding_mask
