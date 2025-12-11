@@ -144,5 +144,9 @@ class DiffusionTSAdapter(ForecastingModel):
         observed_data = batch.observed_data.to(dtype=torch.float32, device=self.device)
         padding_mask = None
         if batch.observed_mask is not None:
-            padding_mask = batch.observed_mask.bool().all(dim=-1)
+            # Mark timesteps where *no* features are observed so we can keep the
+            # padding intact after sampling. Using ``all`` would treat fully
+            # observed timesteps as padding, forcing the generated sequence to
+            # exactly match the input and breaking evaluation visualizations.
+            padding_mask = ~batch.observed_mask.bool().any(dim=-1)
         return observed_data, padding_mask

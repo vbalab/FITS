@@ -71,7 +71,11 @@ class FMTSAdapter(ForecastingModel):
                 )
 
                 if batch.observed_mask is not None:
-                    padding_mask = batch.observed_mask.bool().all(dim=-1)
+                    # Preserve padded timesteps (where no features are observed)
+                    # instead of overwriting fully observed timesteps. The
+                    # previous ``all`` reduction forced all generated outputs to
+                    # mirror the input when the dataset had no missing values.
+                    padding_mask = ~batch.observed_mask.bool().any(dim=-1)
                     generated[padding_mask] = diffusion_batch[padding_mask]
 
                 samples.append(generated)
