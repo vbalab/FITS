@@ -10,8 +10,6 @@ from fits.dataframes.dataset import ForecastingData
 
 @dataclass
 class CSDIDiffusionConfig:
-    """Typed configuration for the diffusion backbone inside CSDI."""
-
     layers: int = 6
     channels: int = 64  # d_model
     nheads: int = 8
@@ -24,8 +22,6 @@ class CSDIDiffusionConfig:
 
 @dataclass
 class CSDIConfig(ModelConfig):
-    """Typed configuration for the :class:`CSDIAdapter`."""
-
     target_dim: int = 36
     time_embedding_dim: int = 128
     feature_embedding_dim: int = 16
@@ -48,8 +44,6 @@ class CSDIConfig(ModelConfig):
 
 
 class CSDIAdapter(ForecastingModel):
-    """Adapter that wraps the original CSDI implementation into :class:`ForecastingModel`."""
-
     def __init__(self, config: CSDIConfig = CSDIConfig()):
         super().__init__(config)
         self.target_dim = config.target_dim
@@ -69,6 +63,7 @@ class CSDIAdapter(ForecastingModel):
         csdi_batch = self._adapt_batch(batch)
         return self.csdi_model(csdi_batch, is_train=is_train)
 
+    @torch.no_grad()
     def evaluate(self, batch: ForecastingData, n_samples: int) -> ForecastedData:
         csdi_batch = self._adapt_batch(batch)
         samples, observed_data, target_mask, observed_mask, time_points = (
@@ -76,9 +71,13 @@ class CSDIAdapter(ForecastingModel):
         )
 
         return ForecastedData(
-            forecasted_data=samples,
-            observed_data=observed_data,
-            observed_mask=observed_mask,
+            forecasted_data=samples.permute(0, 2, 1),
+            observed_data=observed_data.permute(
+                0, 2, 1
+            ),  # TODO: change to batch.observed_data
+            observed_mask=observed_mask.permute(
+                0, 2, 1
+            ),  # TODO: change to batch.observed_mask
             forecast_mask=batch.forecast_mask,
             time_points=time_points,
         )
@@ -89,14 +88,12 @@ class CSDIAdapter(ForecastingModel):
 
         observed_data = batch.observed_data
         observed_mask = batch.observed_mask
+        time_points = batch.time_points[
+            ..., 0
+        ]  # CSDI expects shape [B, L] for timepoints; ForecastingData stores [B, L, K].
         gt_mask = 1 - batch.forecast_mask
         # 0 - to be generated
         # 1 - known at generation
-        time_points = batch.time_points
-
-        # CSDI expects shape [B, L] for timepoints; ForecastingData stores [B, L, K].
-        if time_points.dim() == 3:
-            time_points = time_points[..., 0]
 
         return {
             "observed_data": observed_data.to(dtype=torch.float32, device=self.device),

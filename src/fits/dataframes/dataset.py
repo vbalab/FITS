@@ -16,19 +16,17 @@ class ModelMode(Enum):
     test = 2
 
 
-# TODO: change [T, K] to [K, L], where L=T (new notation to be the same as in `ForecastedData`)
-# TODO: therefore, change logic everywhere where `ForecastingData` is used
 @dataclass
 class ForecastingData:
-    observed_data: torch.Tensor  # [T, K] float
-    observed_mask: torch.Tensor  # [T, K] int
+    observed_data: torch.Tensor  # [L, K] float
+    observed_mask: torch.Tensor  # [L, K] int
     # 0 - not observed
     # 1 - observed (ground truth)
-    forecast_mask: torch.Tensor  # [T, K] int
+    forecast_mask: torch.Tensor  # [L, K] int
     # 0 - context (history)
     # 1 - horizon to forecast (to be generated)
-    time_points: torch.Tensor  # [T, K] float
-    feature_ids: torch.Tensor  # [T, K] float
+    time_points: torch.Tensor  # [L, K] float
+    feature_ids: torch.Tensor  # [L, K] float
 
 
 @dataclass
@@ -157,9 +155,8 @@ class DatasetAirQuality(ForecastingDataset):
         forecast_mask[: self.horizon] = 0
         forecast_mask[-self.horizon :] = 1
 
-        window_data = self.data[start_idx:end_idx]
-        window_data = self._normalize(window_data)
-        observed_data = window_data
+        observed_data = self.data[start_idx:end_idx]
+        observed_data = self._normalize(observed_data)
 
         return ForecastingData(
             observed_data=observed_data,

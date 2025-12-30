@@ -68,85 +68,73 @@ class DiffusionTSAdapter(ForecastingModel):
         self.diffusion = Diffusion_TS(**config.diffusion_kwargs()).to(self.device)
 
     def forward(self, batch: ForecastingData):
-        diffusion_batch, padding_mask = self._adapt_batch(batch)
+        diffusion_batch, padding_mask, _ = self._adapt_batch(batch)
         return self.diffusion(diffusion_batch, padding_masks=padding_mask)
 
+    @torch.no_grad()
     def evaluate(self, batch: ForecastingData, n_samples: int) -> ForecastedData:
         self.eval()
 
-        with torch.no_grad():
-            diffusion_batch, padding_mask = self._adapt_batch(batch)
-            batch_size = diffusion_batch.size(0)
+        diffusion_batch, padding_mask, partial_mask = self._adapt_batch(batch)
+        batch_size = diffusion_batch.size(0)
+        model_kwargs = {
+            "coef": self.config.langevin_coef,
+            "learning_rate": self.config.langevin_learning_rate,
+        }
 
-            partial_mask = (
-                (batch.observed_mask * (1 - batch.forecast_mask)).to(self.device).bool()
-            )
-            # 0 - to be generated
-            # 1 - known at generation
-
-            forecast_mask = batch.forecast_mask.to(self.device).permute(
-                0, 2, 1
-            )  # [B, K, L]
-
-            model_kwargs = {
-                "coef": self.config.langevin_coef,
-                "learning_rate": self.config.langevin_learning_rate,
-            }
-
-            samples = []
-            for _ in range(n_samples):
-                if self.diffusion.fast_sampling:
-                    generated = self.diffusion.fast_sample_infill(
-                        (batch_size, self.config.seq_len, self.config.feature_size),
-                        target=diffusion_batch,
-                        sampling_timesteps=self.diffusion.sampling_timesteps,
-                        partial_mask=partial_mask,
-                        model_kwargs=model_kwargs,
-                    )
-                else:
-                    generated = self.diffusion.sample_infill(
-                        shape=(
-                            batch_size,
-                            self.config.seq_len,
-                            self.config.feature_size,
-                        ),
-                        target=diffusion_batch,
-                        partial_mask=partial_mask,
-                        model_kwargs=model_kwargs,
-                    )
-
-                generated = generated.to(
-                    diffusion_batch.device, dtype=diffusion_batch.dtype
+        samples = []
+        for _ in range(n_samples):
+            if self.diffusion.fast_sampling:
+                generated = self.diffusion.fast_sample_infill(
+                    (batch_size, self.config.seq_len, self.config.feature_size),
+                    target=diffusion_batch,
+                    sampling_timesteps=self.diffusion.sampling_timesteps,
+                    partial_mask=partial_mask,
+                    model_kwargs=model_kwargs,
+                )
+            else:
+                generated = self.diffusion.sample_infill(
+                    shape=(
+                        batch_size,
+                        self.config.seq_len,
+                        self.config.feature_size,
+                    ),
+                    target=diffusion_batch,
+                    partial_mask=partial_mask,
+                    model_kwargs=model_kwargs,
                 )
 
-                if padding_mask is not None:
-                    generated[padding_mask] = diffusion_batch[padding_mask]
-
-                samples.append(generated)
-
-            stacked = torch.stack(samples, dim=1)
-
-            observed_data = batch.observed_data.to(self.device).permute(0, 2, 1)
-            observed_mask = batch.observed_mask.to(self.device).permute(0, 2, 1)
-
-            time_points = batch.time_points.to(self.device)
-            if time_points.dim() == 3:
-                time_points = time_points[..., 0]
-
-            return ForecastedData(
-                forecasted_data=stacked.permute(0, 1, 3, 2),
-                forecast_mask=forecast_mask,
-                observed_data=observed_data,
-                observed_mask=observed_mask,
-                time_points=time_points,
+            generated = generated.to(
+                diffusion_batch.device,
+                dtype=diffusion_batch.dtype,
             )
+
+            generated[padding_mask] = diffusion_batch[padding_mask]
+
+            samples.append(generated)
+
+        stacked = torch.stack(samples, dim=1)
+
+        return ForecastedData(
+            forecasted_data=stacked,
+            forecast_mask=batch.forecast_mask,
+            observed_data=batch.observed_data,
+            observed_mask=batch.observed_mask,
+            time_points=batch.time_points[..., 0],
+        )
 
     def _adapt_batch(
         self, batch: ForecastingData
-    ) -> tuple[torch.Tensor, torch.Tensor | None]:
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         assert isinstance(batch, ForecastingData)
 
         observed_data = batch.observed_data.to(dtype=torch.float32, device=self.device)
         padding_mask = ~batch.observed_mask.bool().any(dim=-1)
 
-        return observed_data, padding_mask
+        partial_mask = (
+            (batch.observed_mask * (1 - batch.forecast_mask)).to(self.device).bool()
+        )
+        # 0 - to be generated
+        # 1 - known at generation
+
+        return observed_data, padding_mask, partial_mask

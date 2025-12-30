@@ -18,12 +18,13 @@ from fits.dataframes.dataset import ForecastingData, NormalizationStats
 
 @dataclass
 class ForecastedData:
-    forecasted_data: torch.Tensor  # [B, nsample, K, L] float
-    forecast_mask: torch.Tensor  # [B, K, L] int
+    # `nsample` - number of Monte-Carlo forecast samples
+    forecasted_data: torch.Tensor  # [B, nsample, L, K] float
+    forecast_mask: torch.Tensor  # [B, L, K] int
     # 0 - context (history)
     # 1 - horizon to forecast (to be generated)
-    observed_data: torch.Tensor  # [B, K, L] float
-    observed_mask: torch.Tensor  # [B, K, L] int
+    observed_data: torch.Tensor  # [B, L, K] float
+    observed_mask: torch.Tensor  # [B, L, K] int
     # 0 - not observed
     # 1 - observed (ground truth)
     time_points: torch.Tensor  # [B, L] float
@@ -244,36 +245,26 @@ def Evaluate(
 
     with tqdm(test_loader, mininterval=5.0, maxinterval=50.0) as it:
         for batch_no, test_batch in enumerate(it, start=1):
-            forecasted = model.evaluate(test_batch, nsample)
+            f: ForecastedData = model.evaluate(test_batch, nsample)
 
-            forecasted_data = forecasted.forecasted_data.permute(
-                0, 1, 3, 2
-            )  # (B,nsample,L,K)
-            forecast_mask = forecasted.forecast_mask.permute(0, 2, 1)
-            observed_data = forecasted.observed_data.permute(0, 2, 1)  # (B,L,K)
-            observed_mask = forecasted.observed_mask.permute(0, 2, 1)
-            time_points = forecasted.time_points
+            all_forecasted_data.append(f.forecasted_data)
+            all_forecast_mask.append(f.forecast_mask)
+            all_observed_data.append(f.observed_data)
+            all_observed_mask.append(f.observed_mask)
+            all_time_points.append(f.time_points)
 
-            all_forecasted_data.append(forecasted_data)
-            all_forecast_mask.append(forecast_mask)
-            all_observed_data.append(observed_data)
-            all_observed_mask.append(observed_mask)
-            all_time_points.append(time_points)
-
-            forecasted_data_median = forecasted_data.median(dim=1)
+            forecasted_data_median = f.forecasted_data.median(dim=1).values
 
             mse_current = (
-                ((forecasted_data_median.values - observed_data) * forecast_mask) ** 2
+                ((forecasted_data_median - f.observed_data) * f.forecast_mask) ** 2
             ) * (scaler_tensor**2)
             mae_current = (
-                torch.abs(
-                    (forecasted_data_median.values - observed_data) * forecast_mask
-                )
+                torch.abs((forecasted_data_median - f.observed_data) * f.forecast_mask)
             ) * scaler_tensor
 
             mse_total += mse_current.sum().item()
             mae_total += mae_current.sum().item()
-            evalpoints_total += forecast_mask.sum().item()
+            evalpoints_total += f.forecast_mask.sum().item()
 
             it.set_postfix(
                 ordered_dict={
@@ -290,7 +281,7 @@ def Evaluate(
     all_observed_mask_tensor = torch.cat(all_observed_mask, dim=0)
     all_time_points_tensor = torch.cat(all_time_points, dim=0)
 
-    with open(folder_name / f"generated_outputs_nsample{nsample}.pk", "wb") as f:
+    with open(folder_name / f"generated_outputs_nsample{nsample}.pk", "wb") as file:
         pickle.dump(
             [
                 all_forecasted_data_tensor,
@@ -301,7 +292,7 @@ def Evaluate(
                 scaler_tensor.cpu(),
                 mean_tensor.cpu(),
             ],
-            f,
+            file,
         )
 
     crps = CalcQuantileCRPS(
@@ -322,8 +313,8 @@ def Evaluate(
     rmse = np.sqrt(mse_total / evalpoints_total)
     mae = mae_total / evalpoints_total
 
-    with open(folder_name / f"result_nsample{nsample}.pk", "wb") as f:
-        pickle.dump([rmse, mae, crps], f)
+    with open(folder_name / f"result_nsample{nsample}.pk", "wb") as file:
+        pickle.dump([rmse, mae, crps], file)
 
     print("RMSE:", rmse)
     print("MAE:", mae)
