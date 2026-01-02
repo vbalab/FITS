@@ -151,9 +151,8 @@ class DatasetAirQuality(ForecastingDataset):
 
         observed_mask = self.mask[start_idx:end_idx]
 
-        forecast_mask = observed_mask.clone()
-        forecast_mask[: self.horizon] = 0
-        forecast_mask[-self.horizon :] = 1
+        forecast_mask = torch.zeros_like(observed_mask)
+        forecast_mask[-self.horizon :] = observed_mask[-self.horizon :]
 
         observed_data = self.data[start_idx:end_idx]
         observed_data = self._normalize(observed_data)
