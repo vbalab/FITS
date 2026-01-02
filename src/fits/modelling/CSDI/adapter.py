@@ -71,7 +71,7 @@ class CSDIAdapter(ForecastingModel):
         )
 
         return ForecastedData(
-            forecasted_data=samples.permute(0, 2, 1),
+            forecasted_data=samples.permute(0, 1, 3, 2),
             observed_data=observed_data.permute(
                 0, 2, 1
             ),  # TODO: change to batch.observed_data
