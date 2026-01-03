@@ -73,7 +73,7 @@ def Train(
     valid_loader: DataLoader,
     lr: float = 1.0e-3,
     epochs: int = 200,
-    valid_epoch_interval: int = 40,
+    valid_epoch_interval: int = 20,
     verbose: bool = True,
 ):
     """Generic training loop for :class:`ForecastingModel` implementations."""
@@ -314,7 +314,7 @@ def Evaluate(
     mae = mae_total / evalpoints_total
 
     with open(folder_name / f"result_nsample{nsample}.pk", "wb") as file:
-        pickle.dump([rmse, mae, crps], file)
+        pickle.dump([rmse, mae, crps, crps_sum], file)
 
     print("RMSE:", rmse)
     print("MAE:", mae)

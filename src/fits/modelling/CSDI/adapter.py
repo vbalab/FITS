@@ -78,7 +78,7 @@ class CSDIAdapter(ForecastingModel):
             observed_mask=observed_mask.permute(
                 0, 2, 1
             ),  # TODO: change to batch.observed_mask
-            forecast_mask=batch.forecast_mask,
+            forecast_mask=batch.forecast_mask.to(device=self.device, dtype=torch.float32),
             time_points=time_points,
         )
 
@@ -91,7 +91,7 @@ class CSDIAdapter(ForecastingModel):
         time_points = batch.time_points[
             ..., 0
         ]  # CSDI expects shape [B, L] for timepoints; ForecastingData stores [B, L, K].
-        gt_mask = 1 - batch.forecast_mask
+        gt_mask = batch.observed_mask * (1 - batch.forecast_mask)
         # 0 - to be generated
         # 1 - known at generation
 
