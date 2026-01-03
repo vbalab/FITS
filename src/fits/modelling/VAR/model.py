@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from dataclasses import dataclass
 
 import torch
@@ -11,8 +9,6 @@ from fits.modelling.framework import ForecastedData, ForecastingModel, ModelConf
 
 @dataclass
 class VARConfig(ModelConfig):
-    """Configuration for the seasonal VAR model."""
-
     seq_len: int = 48
     horizon: int = 6
     feature_size: int = 36
@@ -21,11 +17,9 @@ class VARConfig(ModelConfig):
 
 
 class SeasonalVAR(ForecastingModel):
-    """Seasonal VAR model compatible with the forecasting framework."""
-
     def __init__(self, config: VARConfig = VARConfig()):
         super().__init__(config)
-        self.config = config
+        self.config: VARConfig = config
 
         self.coefficients = nn.Parameter(
             0.01
