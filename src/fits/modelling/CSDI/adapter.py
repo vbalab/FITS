@@ -78,7 +78,9 @@ class CSDIAdapter(ForecastingModel):
             observed_mask=observed_mask.permute(
                 0, 2, 1
             ),  # TODO: change to batch.observed_mask
-            forecast_mask=batch.forecast_mask.to(device=self.device, dtype=torch.float32),
+            forecast_mask=batch.forecast_mask.to(
+                device=self.device, dtype=torch.float32
+            ),
             time_points=time_points,
         )
 

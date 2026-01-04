@@ -313,8 +313,10 @@ def Evaluate(
     rmse = np.sqrt(mse_total / evalpoints_total)
     mae = mae_total / evalpoints_total
 
+    metrics = [rmse, mae, crps, crps_sum]
+    metrics = [float(metric) for metric in metrics]
     with open(folder_name / f"result_nsample{nsample}.pk", "wb") as file:
-        pickle.dump([rmse, mae, crps, crps_sum], file)
+        pickle.dump(metrics, file)
 
     print("RMSE:", rmse)
     print("MAE:", mae)

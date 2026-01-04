@@ -79,10 +79,10 @@ class FMTSAdapter(ForecastingModel):
 
         return ForecastedData(
             forecasted_data=stacked,
-            forecast_mask=batch.forecast_mask,
-            observed_data=batch.observed_data,
-            observed_mask=batch.observed_mask,
-            time_points=batch.time_points[..., 0],
+            forecast_mask=batch.forecast_mask.to(self.device, dtype=torch.float32),
+            observed_data=batch.observed_data.to(self.device, dtype=torch.float32),
+            observed_mask=batch.observed_mask.to(self.device, dtype=torch.float32),
+            time_points=batch.time_points[..., 0].to(self.device, dtype=torch.float32),
         )
 
     def _adapt_batch(self, batch: ForecastingData) -> tuple[torch.Tensor, torch.Tensor]:
