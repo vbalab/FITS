@@ -15,7 +15,6 @@ class DiffusionTSConfig(ModelConfig):
     """Typed configuration for the :class:`DiffusionTSAdapter`."""
 
     seq_len: int = 48
-    horizon: int = 6
     feature_size: int = 36
     n_layer_enc: int = 3
     n_layer_dec: int = 4
@@ -32,6 +31,7 @@ class DiffusionTSConfig(ModelConfig):
     kernel_size: int | None = None
     padding_size: int | None = None
     use_fourier_loss: bool = True
+    # train_loss + fourier_loss --- to encourage the model to reproduce similar spectral content (amplitudes/phases across frequencies), which can improve seasonality and smoothness
     reg_weight: float | None = None
     langevin_coef: float = 1.0
     langevin_learning_rate: float = 0.1

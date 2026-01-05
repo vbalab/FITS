@@ -9,8 +9,6 @@ from fits.modelling.framework import ForecastedData, ForecastingModel, ModelConf
 
 @dataclass
 class VARConfig(ModelConfig):
-    seq_len: int = 48
-    horizon: int = 6
     feature_size: int = 36
     lag_order: int = 3
     seasonal_period: int = 24
