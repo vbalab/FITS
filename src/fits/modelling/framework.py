@@ -174,9 +174,9 @@ def CalcQuantileLoss(target, forecast, q: float, eval_points) -> torch.Tensor:
     )
 
 
-def CalcQuantileCRPS(target, forecast, eval_points, mean_scaler, scaler):
-    target = target * scaler + mean_scaler
-    forecast = forecast * scaler + mean_scaler
+def CalcQuantileCRPS(target, forecast, eval_points, center, scale):
+    target = target * scale + center
+    forecast = forecast * scale + center
 
     quantiles = np.arange(0.05, 1.0, 0.05)
     denom = torch.sum(torch.abs(target * eval_points))
@@ -191,16 +191,16 @@ def CalcQuantileCRPS(target, forecast, eval_points, mean_scaler, scaler):
     return CRPS.item() / len(quantiles)
 
 
-def CalcQuantileCRPSSum(target, forecast, eval_points, mean_scaler, scaler):
+def CalcQuantileCRPSSum(target, forecast, eval_points, center, scale):
 
     # Ensure the evaluation mask participates in floating point operations.
     # Some models (e.g., DiffusionTSAdapter) surface boolean masks, causing
     # ``mean`` to fail because it cannot infer a floating output dtype from
     # booleans.  Cast explicitly to float before reducing.
     eval_points = eval_points.float().mean(-1)
-    target = target * scaler + mean_scaler
+    target = target * scale + center
     target = target.sum(-1)
-    forecast = forecast * scaler + mean_scaler
+    forecast = forecast * scale + center
 
     quantiles = np.arange(0.05, 1.0, 0.05)
     denom = torch.sum(torch.abs(target * eval_points))
@@ -234,8 +234,13 @@ def Evaluate(
     mae_total = 0.0
     evalpoints_total = 0.0
 
-    scaler_tensor = torch.as_tensor(normalization.std, device=model.device)
-    mean_tensor = torch.as_tensor(normalization.mean, device=model.device)
+    min_tensor = torch.as_tensor(normalization.min, device=model.device)
+    max_tensor = torch.as_tensor(normalization.max, device=model.device)
+    center_tensor = (max_tensor + min_tensor) / 2
+    scale_tensor = (max_tensor - min_tensor) / 2
+    scale_tensor = torch.where(
+        scale_tensor == 0, torch.ones_like(scale_tensor), scale_tensor
+    )
 
     all_forecasted_data: list[torch.Tensor] = []
     all_forecast_mask: list[torch.Tensor] = []
@@ -257,10 +262,10 @@ def Evaluate(
 
             mse_current = (
                 ((forecasted_data_median - f.observed_data) * f.forecast_mask) ** 2
-            ) * (scaler_tensor**2)
+            ) * (scale_tensor**2)
             mae_current = (
                 torch.abs((forecasted_data_median - f.observed_data) * f.forecast_mask)
-            ) * scaler_tensor
+            ) * scale_tensor
 
             mse_total += mse_current.sum().item()
             mae_total += mae_current.sum().item()
@@ -289,8 +294,8 @@ def Evaluate(
                 all_observed_data_tensor,
                 all_observed_mask_tensor,
                 all_time_points_tensor,
-                scaler_tensor.cpu(),
-                mean_tensor.cpu(),
+                scale_tensor.cpu(),
+                center_tensor.cpu(),
             ],
             file,
         )
@@ -299,15 +304,15 @@ def Evaluate(
         all_observed_data_tensor,
         all_forecasted_data_tensor,
         all_forecast_mask_tensor,
-        mean_tensor,
-        scaler_tensor,
+        center_tensor,
+        scale_tensor,
     )
     crps_sum = CalcQuantileCRPSSum(
         all_observed_data_tensor,
         all_forecasted_data_tensor,
         all_forecast_mask_tensor,
-        mean_tensor,
-        scaler_tensor,
+        center_tensor,
+        scale_tensor,
     )
 
     rmse = np.sqrt(mse_total / evalpoints_total)

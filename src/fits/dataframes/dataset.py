@@ -31,15 +31,15 @@ class ForecastingData:
 
 @dataclass
 class NormalizationStats:
-    mean: torch.Tensor
-    std: torch.Tensor
+    min: torch.Tensor
+    max: torch.Tensor
 
     def as_device(
         self, device: torch.device, dtype: torch.dtype = torch.float32
     ) -> "NormalizationStats":
         return NormalizationStats(
-            mean=self.mean.to(device=device, dtype=dtype),
-            std=self.std.to(device=device, dtype=dtype),
+            min=self.min.to(device=device, dtype=dtype),
+            max=self.max.to(device=device, dtype=dtype),
         )
 
 
@@ -180,20 +180,21 @@ class DatasetAirQuality(ForecastingDataset):
         observed_values = values[:last_index]
         observed_mask = mask[:last_index]
 
-        feature_sum = (observed_values * observed_mask).sum(axis=0)
         feature_count = observed_mask.sum(axis=0)
 
-        mean = feature_sum / np.clip(feature_count, a_min=1, a_max=None)
-        variance = (((observed_values - mean) ** 2) * observed_mask).sum(
-            axis=0
-        ) / np.clip(feature_count, a_min=1, a_max=None)
+        masked_min = np.where(observed_mask, observed_values, np.inf)
+        masked_max = np.where(observed_mask, observed_values, -np.inf)
 
-        std = np.sqrt(variance)
-        std[std == 0] = 1.0
+        feature_min = masked_min.min(axis=0)
+        feature_max = masked_max.max(axis=0)
+
+        empty_features = feature_count == 0
+        feature_min[empty_features] = 0.0
+        feature_max[empty_features] = 0.0
 
         return NormalizationStats(
-            mean=torch.from_numpy(mean.astype(np.float32)),
-            std=torch.from_numpy(std.astype(np.float32)),
+            min=torch.from_numpy(feature_min.astype(np.float32)),
+            max=torch.from_numpy(feature_max.astype(np.float32)),
         )
 
     def _normalize(self, window_data: torch.Tensor) -> torch.Tensor:
@@ -201,7 +202,11 @@ class DatasetAirQuality(ForecastingDataset):
             return window_data
 
         stats = self.normalization_stats
-        if stats.mean.device != window_data.device:
+        if stats.min.device != window_data.device:
             stats = stats.as_device(window_data.device, window_data.dtype)
 
-        return (window_data - stats.mean) / stats.std
+        center = (stats.max + stats.min) / 2
+        scale = (stats.max - stats.min) / 2
+        scale = torch.where(scale == 0, torch.ones_like(scale), scale)
+
+        return (window_data - center) / scale
