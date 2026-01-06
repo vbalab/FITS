@@ -21,6 +21,7 @@ class DiffusionTSConfig(ModelConfig):
     d_model: int = 64
     timesteps: int = 100
     sampling_timesteps: int = 100
+    # fast_sampling = sampling_timesteps < timesteps
     loss_type: Literal["l1", "l2"] = "l1"
     beta_schedule: Literal["linear", "cosine"] = "cosine"
     n_heads: int = 4
