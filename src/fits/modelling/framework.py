@@ -72,28 +72,48 @@ def Train(
     train_loader: DataLoader,
     valid_loader: DataLoader,
     lr: float = 1.0e-3,
-    epochs: int = 200,
+    epochs: int = 500,
     valid_epoch_interval: int = 20,
     verbose: bool = True,
+    warmup_epochs: int = 10,
+    warmup_start_factor: float = 0.1,  # initial lr = lr * warmup_start_factor
+    weight_decay: float = 1e-6,
+    model_name: str | None = None,
 ):
-    """Generic training loop for :class:`ForecastingModel` implementations."""
+    if not model_name:
+        current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+        model_name = f"{model.model_name}_{current_time}"
 
-    current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
-    folder_name = TRAINING_PATH / f"{model.model_name}_{current_time}"
+    folder_name = TRAINING_PATH / model_name
     folder_name.mkdir(parents=True, exist_ok=True)
 
-    opt = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=1e-6)
+    opt = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
 
     # first 60% epoechs: 1e-3
     # then  20% epoechs: 1e-3 * 0.1 = 1e-4
     # then  10% epoechs: 1e-4 * 0.1 = 1e-5
     p1 = int(0.6 * epochs)
     p2 = int(0.8 * epochs)
-    shed = torch.optim.lr_scheduler.MultiStepLR(opt, milestones=[p1, p2], gamma=0.1)
+
+    if warmup_epochs > 0:
+        def lr_lambda(epoch: int) -> float:
+            warm = min(1.0, (epoch + 1) / float(warmup_epochs))
+            # approximate MultiStepLR behavior with epoch-based factor:
+            # after passing milestones, apply gamma^k
+            k = 0
+            if (epoch + 1) > p1:
+                k += 1
+            if (epoch + 1) > p2:
+                k += 1
+            return (warmup_start_factor + (1.0 - warmup_start_factor) * warm) * (0.1 ** k)
+
+        scheduler = torch.optim.lr_scheduler.LambdaLR(opt, lr_lambda=lr_lambda)
+    else:
+        scheduler = torch.optim.lr_scheduler.MultiStepLR(opt, milestones=[p1, p2], gamma=0.1)
 
     metrics: dict[str, list[tuple[int, float]]] = {"train_loss": [], "test_loss": []}
-
     best_valid_loss = float("inf")
+
     for epoch_no in range(epochs):
         epoch_loss = 0.0
         model.train()
@@ -116,8 +136,7 @@ def Train(
                     refresh=False,
                 )
 
-            shed.step()
-
+        scheduler.step()
         metrics["train_loss"].append((epoch_no + 1, epoch_loss))
 
         if (epoch_no + 1) % valid_epoch_interval == 0:
@@ -144,13 +163,10 @@ def Train(
 
             avg_valid_loss = valid_loss / max(valid_batches, 1)
             if best_valid_loss > avg_valid_loss:
+                torch.save(model.state_dict(), folder_name / "best_model.pth")
+
                 best_valid_loss = avg_valid_loss
-                print(
-                    "\n best loss is updated to ",
-                    avg_valid_loss,
-                    "at",
-                    epoch_no,
-                )
+                print("\n best loss is updated to ", avg_valid_loss, "at", epoch_no)
 
         if verbose:
             clear_output(True)
@@ -227,15 +243,13 @@ def Evaluate(
     test_loader: DataLoader,
     normalization: NormalizationStats,
     nsample: int = 10,
+    model_name: str | None = None,
 ):
-    """Evaluate a :class:`ForecastingModel` and persist generated outputs.
+    if not model_name:
+        current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+        model_name = f"{model.model_name}_{current_time}"
 
-    The function keeps the same side effects as the legacy implementation (pickle
-    dumps for generated outputs and final metrics) while improving readability
-    and bookkeeping.
-    """
-    current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
-    folder_name = EVALUATION_PATH / f"{model.model_name}_{current_time}"
+    folder_name = EVALUATION_PATH / model_name
     folder_name.mkdir(parents=True, exist_ok=True)
 
     model.eval()

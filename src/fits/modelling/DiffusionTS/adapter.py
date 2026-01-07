@@ -112,7 +112,7 @@ class DiffusionTSAdapter(ForecastingModel):
                 dtype=diffusion_batch.dtype,
             )
 
-            generated[padding_mask] = diffusion_batch[padding_mask]
+            # generated[padding_mask] = diffusion_batch[padding_mask]
 
             samples.append(generated)
 
@@ -132,7 +132,8 @@ class DiffusionTSAdapter(ForecastingModel):
         assert isinstance(batch, ForecastingData)
 
         observed_data = batch.observed_data.to(dtype=torch.float32, device=self.device)
-        padding_mask = ~batch.observed_mask.bool().any(dim=-1)
+        padding_mask = None
+        # padding_mask = ~batch.observed_mask.bool().any(dim=-1)
 
         partial_mask = (
             (batch.observed_mask * (1 - batch.forecast_mask)).to(self.device).bool()
