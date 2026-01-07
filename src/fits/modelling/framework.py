@@ -162,6 +162,15 @@ def Train(
                 plt.plot(*zip(*history))
                 plt.grid()
 
+            plt.gca().text(
+                0.02,
+                0.98,
+                f"lr = {opt.param_groups[0]['lr']:.2e}",
+                transform=plt.gca().transAxes,
+                va="top",
+                ha="left",
+            )
+
             plt.savefig(folder_name / "training.png")
             plt.show()
 

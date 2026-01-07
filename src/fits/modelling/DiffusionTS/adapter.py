@@ -16,12 +16,12 @@ class DiffusionTSConfig(ModelConfig):
 
     seq_len: int = 48
     feature_size: int = 36
-    n_layer_enc: int = 3
+    n_layer_enc: int = 4
     n_layer_dec: int = 4
-    d_model: int = 64
-    timesteps: int = 100
-    sampling_timesteps: int = 100
-    # fast_sampling = sampling_timesteps < timesteps
+    d_model: int = 96  # 4 X 24
+    timesteps: int = 500
+    sampling_timesteps: int = 500
+    # fast_sampling = sampling_timesteps < timesteps; if True, leads to dramatic decrease in sampling quality (500&200 was worse than 200&200)
     loss_type: Literal["l1", "l2"] = "l1"
     beta_schedule: Literal["linear", "cosine"] = "cosine"
     n_heads: int = 4
@@ -34,8 +34,10 @@ class DiffusionTSConfig(ModelConfig):
     use_fourier_loss: bool = True
     # train_loss + fourier_loss --- to encourage the model to reproduce similar spectral content (amplitudes/phases across frequencies), which can improve seasonality and smoothness
     reg_weight: float | None = None
-    langevin_coef: float = 1.0
-    langevin_learning_rate: float = 0.1
+    langevin_coef: float = 1e-2
+    # langevin_coef = 0.0   -> Replace-only conditional sampling
+    # langevin_coef > 0     -> Replace + Guided conditional sampling
+    langevin_learning_rate: float = 5e-2
 
     def diffusion_kwargs(self) -> dict:
         return {
