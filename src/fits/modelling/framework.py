@@ -84,11 +84,11 @@ def Train(
 
     opt = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=1e-6)
 
-    # first 0.10 * epoechs: 1e-3
-    # then  0.15 * epoechs: 1e-3 * 0.1 = 1e-4
-    # then  0.75 * epoechs: 1e-4 * 0.1 = 1e-5
-    p1 = int(0.75 * epochs)
-    p2 = int(0.9 * epochs)
+    # first 60% epoechs: 1e-3
+    # then  20% epoechs: 1e-3 * 0.1 = 1e-4
+    # then  10% epoechs: 1e-4 * 0.1 = 1e-5
+    p1 = int(0.6 * epochs)
+    p2 = int(0.8 * epochs)
     shed = torch.optim.lr_scheduler.MultiStepLR(opt, milestones=[p1, p2], gamma=0.1)
 
     metrics: dict[str, list[tuple[int, float]]] = {"train_loss": [], "test_loss": []}
