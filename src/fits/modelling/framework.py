@@ -95,7 +95,11 @@ def Train(
     p1 = int(0.6 * epochs)
     p2 = int(0.8 * epochs)
 
+    scheduler: (
+        torch.optim.lr_scheduler.LambdaLR | torch.optim.lr_scheduler.MultiStepLR | None
+    ) = None
     if warmup_epochs > 0:
+
         def lr_lambda(epoch: int) -> float:
             warm = min(1.0, (epoch + 1) / float(warmup_epochs))
             # approximate MultiStepLR behavior with epoch-based factor:
@@ -105,11 +109,13 @@ def Train(
                 k += 1
             if (epoch + 1) > p2:
                 k += 1
-            return (warmup_start_factor + (1.0 - warmup_start_factor) * warm) * (0.1 ** k)
+            return (warmup_start_factor + (1.0 - warmup_start_factor) * warm) * (0.1**k)
 
         scheduler = torch.optim.lr_scheduler.LambdaLR(opt, lr_lambda=lr_lambda)
     else:
-        scheduler = torch.optim.lr_scheduler.MultiStepLR(opt, milestones=[p1, p2], gamma=0.1)
+        scheduler = torch.optim.lr_scheduler.MultiStepLR(
+            opt, milestones=[p1, p2], gamma=0.1
+        )
 
     metrics: dict[str, list[tuple[int, float]]] = {"train_loss": [], "test_loss": []}
     best_valid_loss = float("inf")
