@@ -57,3 +57,7 @@ def DownloadDatasetAirQuality() -> None:
     shutil.rmtree(tmp_dir)
     tmp_dir.mkdir(parents=True, exist_ok=True)
     shutil.move(DATASETS_PATH / "pm25_ground.txt", DatasetsPaths.pm25.value)
+
+def DownloadDatasetSolar() -> None:
+    # TODO: Use link https://github.com/laiguokun/multivariate-time-series-data/blob/master/solar-energy/solar_AL.txt.gz?raw=true
+    ...
