@@ -1,6 +1,7 @@
 import shutil
 import tarfile
 import zipfile
+import gzip
 import requests
 
 from fits.config import DATASETS_PATH, DatasetsPaths
@@ -58,6 +59,23 @@ def DownloadDatasetAirQuality() -> None:
     tmp_dir.mkdir(parents=True, exist_ok=True)
     shutil.move(DATASETS_PATH / "pm25_ground.txt", DatasetsPaths.pm25.value)
 
+
 def DownloadDatasetSolar() -> None:
-    # TODO: Use link https://github.com/laiguokun/multivariate-time-series-data/blob/master/solar-energy/solar_AL.txt.gz?raw=true
-    ...
+    url = "https://github.com/laiguokun/multivariate-time-series-data/raw/master/solar-energy/solar_AL.txt.gz"
+
+    archive_path = DATASETS_PATH / "solar_AL.txt.gz"
+    dataset_path = DatasetsPaths.solar.value
+    dataset_path.parent.mkdir(parents=True, exist_ok=True)
+
+    with requests.get(url, stream=True) as r:
+        r.raise_for_status()
+        with open(archive_path, "wb") as f:
+            for chunk in r.iter_content(chunk_size=8192):
+                if chunk:
+                    f.write(chunk)
+
+    with gzip.open(archive_path, "rb") as gz_file:
+        with open(dataset_path, "wb") as out_file:
+            shutil.copyfileobj(gz_file, out_file)
+
+    archive_path.unlink()
