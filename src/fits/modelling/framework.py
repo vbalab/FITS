@@ -35,8 +35,7 @@ class ModelConfig:
     """Base model configuration used by :class:`ForecastingModel`.
 
     The configuration is intentionally typed to avoid passing around loose
-    dictionaries. Concrete models should subclass this dataclass when they need
-    additional parameters.
+    dictionaries.
     """
 
     name: Optional[str] = None
@@ -67,6 +66,58 @@ class ForecastingModel(nn.Module, ABC):
         """Run model-specific evaluation and return generated samples."""
 
 
+@dataclass
+class EMA:
+    """Exponential Moving Average of model parameters."""
+    decay: float = 0.999
+    device: Optional[torch.device] = None  # e.g. torch.device("cpu") to store EMA on CPU
+
+    def __post_init__(self):
+        self.shadow = {}
+        self._backup = {}
+
+    @torch.no_grad()
+    def register(self, model: torch.nn.Module) -> None:
+        self.shadow = {}
+        for name, p in model.named_parameters():
+            if p.requires_grad:
+                self.shadow[name] = p.detach().clone().to(self.device) if self.device else p.detach().clone()
+
+    @torch.no_grad()
+    def update(self, model: torch.nn.Module) -> None:
+        d = self.decay
+        for name, p in model.named_parameters():
+            if not p.requires_grad:
+                continue
+            assert name in self.shadow, "EMA.register(model) must be called before EMA.update(model)."
+            new = p.detach()
+            if self.device:
+                new = new.to(self.device)
+            self.shadow[name].mul_(d).add_(new, alpha=(1.0 - d))
+
+    @torch.no_grad()
+    def apply(self, model: torch.nn.Module) -> None:
+        """Swap model params to EMA params (stores current params for later restore)."""
+        self._backup = {}
+        for name, p in model.named_parameters():
+            if not p.requires_grad:
+                continue
+            self._backup[name] = p.detach().clone()
+            ema_p = self.shadow[name]
+            if ema_p.device != p.device:
+                ema_p = ema_p.to(p.device)
+            p.copy_(ema_p)
+
+    @torch.no_grad()
+    def restore(self, model: torch.nn.Module) -> None:
+        """Restore params saved by apply()."""
+        for name, p in model.named_parameters():
+            if not p.requires_grad:
+                continue
+            p.copy_(self._backup[name])
+        self._backup = {}
+
+
 def Train(
     model: ForecastingModel,
     train_loader: DataLoader,
@@ -78,6 +129,10 @@ def Train(
     warmup_epochs: int = 10,
     warmup_start_factor: float = 0.1,  # initial lr = lr * warmup_start_factor
     weight_decay: float = 1e-6,
+    use_ema: bool = False,
+    ema_decay: float = 0.995,   # if use_ema=True
+    ema_eval: bool = True,      # if use_ema=True
+    ema_save: bool = True,      # if use_ema=True
     model_name: str | None = None,
 ):
     if not model_name:
@@ -89,11 +144,11 @@ def Train(
 
     opt = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
 
-    # first 60% epoechs: 1e-3
-    # then  20% epoechs: 1e-3 * 0.1 = 1e-4
+    # first 80% epoechs: 1e-3
+    # then  10% epoechs: 1e-3 * 0.1 = 1e-4
     # then  10% epoechs: 1e-4 * 0.1 = 1e-5
-    p1 = int(0.6 * epochs)
-    p2 = int(0.8 * epochs)
+    p1 = int(0.8 * epochs)
+    p2 = int(0.9 * epochs)
 
     scheduler: (
         torch.optim.lr_scheduler.LambdaLR | torch.optim.lr_scheduler.MultiStepLR | None
@@ -117,6 +172,11 @@ def Train(
             opt, milestones=[p1, p2], gamma=0.1
         )
 
+    ema: EMA | None = None
+    if use_ema:
+        ema = EMA(decay=ema_decay)
+        ema.register(model)
+
     metrics: dict[str, list[tuple[int, float]]] = {"train_loss": [], "test_loss": []}
     best_valid_loss = float("inf")
 
@@ -134,6 +194,9 @@ def Train(
                 loss.backward()
                 opt.step()
 
+                if ema:
+                    ema.update(model)
+
                 it.set_postfix(
                     ordered_dict={
                         "avg_epoch_loss": epoch_loss / batch_no,
@@ -147,6 +210,10 @@ def Train(
 
         if (epoch_no + 1) % valid_epoch_interval == 0:
             model.eval()
+
+            if ema and ema_eval:
+                ema.apply(model)
+
             valid_loss = 0.0
             valid_batches = 0
 
@@ -174,6 +241,9 @@ def Train(
                 best_valid_loss = avg_valid_loss
                 print("\n best loss is updated to ", avg_valid_loss, "at", epoch_no)
 
+            if ema and ema_eval:
+                ema.restore(model)
+
         if verbose:
             clear_output(True)
             plt.figure(figsize=(12, 4))
@@ -196,7 +266,13 @@ def Train(
             plt.savefig(folder_name / "training.png")
             plt.show()
 
+        if ema and ema_save:
+            ema.apply(model)
+
         torch.save(model.state_dict(), folder_name / "model.pth")
+
+        if ema and ema_save:
+            ema.restore(model)
 
 
 def CalcQuantileLoss(target, forecast, q: float, eval_points) -> torch.Tensor:

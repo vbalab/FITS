@@ -13,11 +13,11 @@ class FMTSConfig(ModelConfig):
 
     seq_len: int = 48
     feature_size: int = 36
-    n_layer_enc: int = 2
+    n_layer_enc: int = 4
     n_layer_dec: int = 4
     d_model: int = 64
     n_heads: int = 4
-    mlp_hidden_times: int = 3
+    mlp_hidden_times: int = 4
     attn_pd: float = 0.0
     resid_pd: float = 0.0
     kernel_size: int | None = None
@@ -70,8 +70,8 @@ class FMTSAdapter(ForecastingModel):
                 dtype=diffusion_batch.dtype,
             )
 
-            padding_mask = ~batch.observed_mask.bool().any(dim=-1)
-            generated[padding_mask] = diffusion_batch[padding_mask]
+            # padding_mask = ~batch.observed_mask.bool().any(dim=-1)
+            # generated[padding_mask] = diffusion_batch[padding_mask]
 
             samples.append(generated)
 
@@ -86,8 +86,6 @@ class FMTSAdapter(ForecastingModel):
         )
 
     def _adapt_batch(self, batch: ForecastingData) -> tuple[torch.Tensor, torch.Tensor]:
-        assert isinstance(batch, ForecastingData)
-
         observed_data = batch.observed_data.to(dtype=torch.float32, device=self.device)
         partial_mask = (
             (batch.observed_mask * (1 - batch.forecast_mask)).to(self.device).bool()
