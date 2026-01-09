@@ -142,6 +142,7 @@ def Train(
     ema_decay: float = 0.995,  # if use_ema=True
     ema_eval: bool = True,  # if use_ema=True
     ema_save: bool = True,  # if use_ema=True
+    grad_clip_norm: float | None = None,
     folder_name: str | None = None,
 ):
     if not folder_name:
@@ -201,6 +202,8 @@ def Train(
                 epoch_loss += loss.item()
 
                 loss.backward()
+                if grad_clip_norm is not None:
+                    nn.utils.clip_grad_norm_(model.parameters(), grad_clip_norm)
                 opt.step()
 
                 if ema:
