@@ -10,13 +10,13 @@ from fits.dataframes.dataset import ForecastingData
 
 @dataclass
 class CSDIDiffusionConfig:
-    layers: int = 6
+    layers: int = 4
     channels: int = 64  # d_model
     nheads: int = 8
     diffusion_embedding_dim: int = 128
     beta_start: float = 0.0001
     beta_end: float = 0.1
-    num_steps: int = 100
+    num_steps: int = 50
     schedule: Literal["quad", "linear"] = "quad"
 
 

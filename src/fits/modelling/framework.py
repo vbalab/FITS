@@ -69,8 +69,11 @@ class ForecastingModel(nn.Module, ABC):
 @dataclass
 class EMA:
     """Exponential Moving Average of model parameters."""
+
     decay: float = 0.999
-    device: Optional[torch.device] = None  # e.g. torch.device("cpu") to store EMA on CPU
+    device: Optional[torch.device] = (
+        None  # e.g. torch.device("cpu") to store EMA on CPU
+    )
 
     def __post_init__(self):
         self.shadow = {}
@@ -81,7 +84,11 @@ class EMA:
         self.shadow = {}
         for name, p in model.named_parameters():
             if p.requires_grad:
-                self.shadow[name] = p.detach().clone().to(self.device) if self.device else p.detach().clone()
+                self.shadow[name] = (
+                    p.detach().clone().to(self.device)
+                    if self.device
+                    else p.detach().clone()
+                )
 
     @torch.no_grad()
     def update(self, model: torch.nn.Module) -> None:
@@ -89,7 +96,9 @@ class EMA:
         for name, p in model.named_parameters():
             if not p.requires_grad:
                 continue
-            assert name in self.shadow, "EMA.register(model) must be called before EMA.update(model)."
+            assert (
+                name in self.shadow
+            ), "EMA.register(model) must be called before EMA.update(model)."
             new = p.detach()
             if self.device:
                 new = new.to(self.device)
@@ -130,17 +139,17 @@ def Train(
     warmup_start_factor: float = 0.1,  # initial lr = lr * warmup_start_factor
     weight_decay: float = 1e-6,
     use_ema: bool = False,
-    ema_decay: float = 0.995,   # if use_ema=True
-    ema_eval: bool = True,      # if use_ema=True
-    ema_save: bool = True,      # if use_ema=True
-    model_name: str | None = None,
+    ema_decay: float = 0.995,  # if use_ema=True
+    ema_eval: bool = True,  # if use_ema=True
+    ema_save: bool = True,  # if use_ema=True
+    folder_name: str | None = None,
 ):
-    if not model_name:
+    if not folder_name:
         current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
-        model_name = f"{model.model_name}_{current_time}"
+        folder_name = f"{model.model_name}_{current_time}"
 
-    folder_name = TRAINING_PATH / model_name
-    folder_name.mkdir(parents=True, exist_ok=True)
+    folder_path = TRAINING_PATH / folder_name
+    folder_path.mkdir(parents=True, exist_ok=True)
 
     opt = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
 
@@ -236,7 +245,7 @@ def Train(
 
             avg_valid_loss = valid_loss / max(valid_batches, 1)
             if best_valid_loss > avg_valid_loss:
-                torch.save(model.state_dict(), folder_name / "best_model.pth")
+                torch.save(model.state_dict(), folder_path / "best_model.pth")
 
                 best_valid_loss = avg_valid_loss
                 print("\n best loss is updated to ", avg_valid_loss, "at", epoch_no)
@@ -263,13 +272,13 @@ def Train(
                 ha="left",
             )
 
-            plt.savefig(folder_name / "training.png")
+            plt.savefig(folder_path / "training.png")
             plt.show()
 
         if ema and ema_save:
             ema.apply(model)
 
-        torch.save(model.state_dict(), folder_name / "model.pth")
+        torch.save(model.state_dict(), folder_path / "model.pth")
 
         if ema and ema_save:
             ema.restore(model)
@@ -325,14 +334,14 @@ def Evaluate(
     test_loader: DataLoader,
     normalization: NormalizationStats,
     nsample: int = 10,
-    model_name: str | None = None,
+    folder_name: str | None = None,
 ):
-    if not model_name:
+    if not folder_name:
         current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
-        model_name = f"{model.model_name}_{current_time}"
+        folder_name = f"{model.model_name}_{current_time}"
 
-    folder_name = EVALUATION_PATH / model_name
-    folder_name.mkdir(parents=True, exist_ok=True)
+    folder_path = EVALUATION_PATH / folder_name
+    folder_path.mkdir(parents=True, exist_ok=True)
 
     model.eval()
     mse_total = 0.0
@@ -391,7 +400,7 @@ def Evaluate(
     all_observed_mask_tensor = torch.cat(all_observed_mask, dim=0)
     all_time_points_tensor = torch.cat(all_time_points, dim=0)
 
-    with open(folder_name / f"generated_outputs_nsample{nsample}.pk", "wb") as file:
+    with open(folder_path / f"generated_outputs_nsample{nsample}.pk", "wb") as file:
         pickle.dump(
             [
                 all_forecasted_data_tensor,
@@ -425,7 +434,7 @@ def Evaluate(
 
     metrics = [rmse, mae, crps, crps_sum]
     metrics = [float(metric) for metric in metrics]
-    with open(folder_name / f"result_nsample{nsample}.pk", "wb") as file:
+    with open(folder_path / f"result_nsample{nsample}.pk", "wb") as file:
         pickle.dump(metrics, file)
 
     print("RMSE:", rmse)

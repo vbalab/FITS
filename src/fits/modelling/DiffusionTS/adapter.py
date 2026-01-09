@@ -16,8 +16,8 @@ class DiffusionTSConfig(ModelConfig):
 
     seq_len: int = 48
     feature_size: int = 36
-    n_layer_enc: int = 4
-    n_layer_dec: int = 4
+    n_layer_enc: int = 3
+    n_layer_dec: int = 3
     d_model: int = 96  # 4 X 24
     timesteps: int = 500
     sampling_timesteps: int = 500
@@ -128,7 +128,7 @@ class DiffusionTSAdapter(ForecastingModel):
 
     def _adapt_batch(
         self, batch: ForecastingData
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    ) -> tuple[torch.Tensor, torch.Tensor| None, torch.Tensor]:
         observed_data = batch.observed_data.to(dtype=torch.float32, device=self.device)
         padding_mask = None
         # padding_mask = ~batch.observed_mask.bool().any(dim=-1)
