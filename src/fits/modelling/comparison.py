@@ -1,9 +1,12 @@
 import math
-import torch
 import pickle
-import matplotlib.pyplot as plt
-from torch import nn
 from pathlib import Path
+from typing import Sequence
+
+import matplotlib.pyplot as plt
+import numpy as np
+import torch
+from torch import nn
 
 
 def CalculateParams(model: nn.Module):
@@ -124,18 +127,236 @@ def VisualizeForecastSample(
     plt.show()
 
 
-# TODO: Comparison of truth VS forecasted in:
-# PSA plot
-# t-SNE plot
-# Data Density
+def _load_generated_outputs(
+    eval_foldername: str | Path,
+    nsample: int,
+):
+    evaluation_dir = Path(f"../data/models/evaluation/{eval_foldername}")
+    generated_path = evaluation_dir / f"generated_outputs_nsample{nsample}.pk"
 
-def PlotComparisonDataDensity(...):
-    ...
+    with open(generated_path, "rb") as f:
+        (
+            forecasted_data,
+            forecast_mask,
+            observed_data,
+            observed_mask,
+            time_points,
+            scaler_tensor,
+            mean_tensor,
+        ) = pickle.load(f)
+
+    return (
+        forecasted_data.cpu(),
+        forecast_mask.cpu(),
+        observed_data.cpu(),
+        observed_mask.cpu(),
+        time_points.cpu(),
+        scaler_tensor.cpu(),
+        mean_tensor.cpu(),
+    )
 
 
-def PlotComparisonPSA(...):
-    ...
+def _normalize_feature_indices(
+    feature_index: int | Sequence[int] | None,
+    n_features: int,
+) -> list[int]:
+    if feature_index is None:
+        return list(range(n_features))
+    if isinstance(feature_index, int):
+        feature_index = [feature_index]
+    return [idx for idx in feature_index if 0 <= idx < n_features]
 
 
-def PlotComparisonTSNE(...):
-    ...
+def PlotComparisonDataDensity(
+    eval_foldername: str | Path,
+    nsample: int = 10,
+    sample_index: int = 0,
+    feature_index: int | Sequence[int] | None = None,
+    bins: int = 50,
+    figsize: tuple[int, int] = (10, 6),
+) -> None:
+    """
+    Plot data density comparison between observed values and forecast samples.
+    """
+    (
+        forecasted_data,
+        forecast_mask,
+        observed_data,
+        observed_mask,
+        _,
+        _,
+        _,
+    ) = _load_generated_outputs(eval_foldername, nsample)
+
+    n_features = observed_data.shape[-1]
+    selected_features = _normalize_feature_indices(feature_index, n_features)
+    if not selected_features:
+        raise ValueError("No valid feature indices provided.")
+
+    forecast_samples = forecasted_data[sample_index, :, :, selected_features]
+    forecast_samples = forecast_samples.reshape(-1, len(selected_features))
+    forecast_mask_samples = forecast_mask[sample_index, :, selected_features]
+    forecast_mask_samples = forecast_mask_samples.repeat(nsample, 1, 1).reshape(
+        -1, len(selected_features)
+    )
+
+    observed_series = observed_data[sample_index, :, selected_features]
+    observed_series_mask = observed_mask[sample_index, :, selected_features]
+
+    forecast_values = forecast_samples[forecast_mask_samples.bool()]
+    observed_values = observed_series[observed_series_mask.bool()]
+
+    plt.figure(figsize=figsize)
+    plt.hist(
+        observed_values.numpy(),
+        bins=bins,
+        density=True,
+        alpha=0.5,
+        label="Observed",
+        color="tab:blue",
+    )
+    plt.hist(
+        forecast_values.numpy(),
+        bins=bins,
+        density=True,
+        alpha=0.5,
+        label="Forecast samples",
+        color="tab:orange",
+    )
+    plt.title("Data Density Comparison")
+    plt.xlabel("Value")
+    plt.ylabel("Density")
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
+
+
+def PlotComparisonPSA(
+    eval_foldername: str | Path,
+    nsample: int = 10,
+    sample_index: int = 0,
+    feature_index: int | Sequence[int] | None = None,
+    max_points: int = 5000,
+    seed: int = 42,
+    figsize: tuple[int, int] = (8, 8),
+) -> None:
+    """
+    Plot a prediction scatter analysis (observed vs. median forecast).
+    """
+    (
+        forecasted_data,
+        forecast_mask,
+        observed_data,
+        observed_mask,
+        _,
+        _,
+        _,
+    ) = _load_generated_outputs(eval_foldername, nsample)
+
+    n_features = observed_data.shape[-1]
+    selected_features = _normalize_feature_indices(feature_index, n_features)
+    if not selected_features:
+        raise ValueError("No valid feature indices provided.")
+
+    forecast_samples = forecasted_data[sample_index, :, :, selected_features]
+    forecast_median = forecast_samples.median(dim=0).values
+    sample_mask = forecast_mask[sample_index, :, selected_features].bool()
+    observed_series = observed_data[sample_index, :, selected_features]
+    observed_series_mask = observed_mask[sample_index, :, selected_features].bool()
+
+    valid_mask = sample_mask & observed_series_mask
+    forecast_values = forecast_median[valid_mask]
+    observed_values = observed_series[valid_mask]
+
+    if forecast_values.numel() == 0:
+        raise ValueError("No overlapping observed and forecasted values to plot.")
+
+    if forecast_values.numel() > max_points:
+        rng = torch.Generator().manual_seed(seed)
+        indices = torch.randperm(forecast_values.numel(), generator=rng)[:max_points]
+        forecast_values = forecast_values.flatten()[indices]
+        observed_values = observed_values.flatten()[indices]
+
+    plt.figure(figsize=figsize)
+    plt.scatter(observed_values.numpy(), forecast_values.numpy(), alpha=0.4, s=12)
+    min_val = min(observed_values.min().item(), forecast_values.min().item())
+    max_val = max(observed_values.max().item(), forecast_values.max().item())
+    plt.plot([min_val, max_val], [min_val, max_val], color="tab:red", linestyle="--")
+    plt.title("Prediction Scatter Analysis")
+    plt.xlabel("Observed")
+    plt.ylabel("Median forecast")
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
+
+
+def PlotComparisonTSNE(
+    eval_foldername: str | Path,
+    nsample: int = 10,
+    sample_index: int = 0,
+    feature_index: int | Sequence[int] | None = None,
+    perplexity: float = 30.0,
+    random_state: int = 42,
+    figsize: tuple[int, int] = (8, 6),
+) -> None:
+    """
+    Plot t-SNE comparison between observed series and median forecast series.
+    """
+    try:
+        from sklearn.manifold import TSNE
+    except ImportError as exc:  # pragma: no cover - optional dependency
+        raise ImportError(
+            "PlotComparisonTSNE requires scikit-learn. "
+            "Install it with `pip install scikit-learn`."
+        ) from exc
+
+    (
+        forecasted_data,
+        forecast_mask,
+        observed_data,
+        observed_mask,
+        _,
+        _,
+        _,
+    ) = _load_generated_outputs(eval_foldername, nsample)
+
+    n_features = observed_data.shape[-1]
+    selected_features = _normalize_feature_indices(feature_index, n_features)
+    if not selected_features:
+        raise ValueError("No valid feature indices provided.")
+
+    observed_series = observed_data[sample_index, :, selected_features]
+    observed_series_mask = observed_mask[sample_index, :, selected_features].bool()
+    forecast_samples = forecasted_data[sample_index, :, :, selected_features]
+    forecast_median = forecast_samples.median(dim=0).values
+    forecast_mask_series = forecast_mask[sample_index, :, selected_features].bool()
+
+    valid_time_mask = (observed_series_mask & forecast_mask_series).all(dim=-1)
+    if valid_time_mask.sum() < 2:
+        raise ValueError("Not enough valid time steps for t-SNE.")
+
+    observed_points = observed_series[valid_time_mask]
+    forecast_points = forecast_median[valid_time_mask]
+
+    data = torch.cat([observed_points, forecast_points], dim=0).numpy()
+    tsne = TSNE(n_components=2, perplexity=perplexity, random_state=random_state)
+    embedding = tsne.fit_transform(data)
+
+    n_obs = observed_points.shape[0]
+    obs_embed = embedding[:n_obs]
+    forecast_embed = embedding[n_obs:]
+
+    plt.figure(figsize=figsize)
+    plt.scatter(obs_embed[:, 0], obs_embed[:, 1], label="Observed", alpha=0.7)
+    plt.scatter(
+        forecast_embed[:, 0],
+        forecast_embed[:, 1],
+        label="Median forecast",
+        alpha=0.7,
+    )
+    plt.title("t-SNE: Observed vs. Forecast")
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
