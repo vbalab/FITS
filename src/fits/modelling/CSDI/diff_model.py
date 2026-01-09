@@ -225,8 +225,11 @@ class diff_CSDI(nn.Module):
         )
 
     def forward(
-        self, x, cond_info, diffusion_step
-    ):  # diffusion_step: torch.LongTensor[B]
+        self,
+        x,
+        cond_info,
+        diffusion_step,  # diffusion_step: torch.LongTensor[B]
+    ):
         # B = batch
         # K = number of ts variables (a.k.a. features)
         # L = time

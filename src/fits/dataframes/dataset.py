@@ -235,7 +235,7 @@ class DatasetSolar(ForecastingDataset):
         if df.shape[1] > 0 and df.iloc[:, -1].isna().all():
             df = df.iloc[:, :-1]
 
-        df = df.iloc[:, (137-n_features):]
+        df = df.iloc[:, (137 - n_features) :]
         values = df.to_numpy(dtype=np.float32)
         mask = ~np.isnan(values)
         np.nan_to_num(values, nan=0.0, copy=False)

@@ -128,7 +128,7 @@ class DiffusionTSAdapter(ForecastingModel):
 
     def _adapt_batch(
         self, batch: ForecastingData
-    ) -> tuple[torch.Tensor, torch.Tensor| None, torch.Tensor]:
+    ) -> tuple[torch.Tensor, torch.Tensor | None, torch.Tensor]:
         observed_data = batch.observed_data.to(dtype=torch.float32, device=self.device)
         padding_mask = None
         # padding_mask = ~batch.observed_mask.bool().any(dim=-1)

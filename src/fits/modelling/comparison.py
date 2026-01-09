@@ -122,3 +122,20 @@ def VisualizeForecastSample(
 
     plt.tight_layout()
     plt.show()
+
+
+# TODO: Comparison of truth VS forecasted in:
+# PSA plot
+# t-SNE plot
+# Data Density
+
+def PlotComparisonDataDensity(...):
+    ...
+
+
+def PlotComparisonPSA(...):
+    ...
+
+
+def PlotComparisonTSNE(...):
+    ...
