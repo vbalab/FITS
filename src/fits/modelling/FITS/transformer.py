@@ -11,10 +11,8 @@ from fits.modelling.FMTS.interpretable_diffusion.model_utils import (
     AdaLayerNorm,
     Conv_MLP,
     GELU2,
-    LearnablePositionalEncoding,
     RMSNorm,
     Transpose,
-    series_decomp,
 )
 
 
@@ -47,22 +45,6 @@ class TrendBlock(nn.Module):
         trend_vals = torch.matmul(x.transpose(1, 2), self.poly_space.to(x.device))
         trend_vals = trend_vals.transpose(1, 2)
         return trend_vals
-
-
-class MovingBlock(nn.Module):
-    """
-    Model trend of time series using the moving average.
-    """
-
-    def __init__(self, out_dim):
-        super(MovingBlock, self).__init__()
-        size = max(min(int(out_dim / 4), 24), 4)
-        self.decomp = series_decomp(size)
-
-    def forward(self, input):
-        b, c, h = input.shape
-        x, trend_vals = self.decomp(input)
-        return x, trend_vals
 
 
 class FourierLayer(nn.Module):
