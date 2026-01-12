@@ -1,6 +1,3 @@
-from __future__ import annotations
-
-import os
 from dataclasses import dataclass
 
 import torch
@@ -25,6 +22,9 @@ class FITSConfig(ModelConfig):
     resid_pd: float = 0.0
     kernel_size: int | None = None
     padding_size: int | None = None
+    lognormal_hucfg_t_sampling: bool = True   # otherwise, uniform
+    hucfg_num_steps: int = 500
+    first_differences: bool = True # TODO: implement in the model (nothing shouldn't be changed in transformer, only in FITSModel): the model models first differences of time series, not level values
 
     def fits_kwargs(self) -> dict[str, int | float | None]:
         return {
@@ -60,9 +60,7 @@ class FITSModel(ForecastingModel):
             conv_params=[config.kernel_size, config.padding_size],
         ).to(self.device)
 
-        self.alpha = 3          ## t shifting, change to 1 is the uniform sampling during inference
         self.time_scalar = 1000 ## scale 0-1 to 0-1000 for time embedding
-        self.num_timesteps = int(os.environ.get("hucfg_num_steps", "100"))
 
     def forward(self, batch: ForecastingData):
         diffusion_batch, _ = self._adapt_batch(batch)
@@ -106,7 +104,7 @@ class FITSModel(ForecastingModel):
         z1 = x_start
 
         t = torch.rand(z0.shape[0], 1, 1, device=z0.device)
-        if os.environ.get("hucfg_t_sampling", "uniform") == "logitnorm":
+        if self.config.lognormal_hucfg_t_sampling:
             t = torch.sigmoid(torch.randn(z0.shape[0], 1, 1, device=z0.device))
 
         z_t = t * z1 + (1.0 - t) * z0
@@ -128,8 +126,8 @@ class FITSModel(ForecastingModel):
         z0 = torch.randn(shape, device=self.device)
         z1 = zt = z0
 
-        for step in range(self.num_timesteps):
-            t = step / self.num_timesteps
+        for step in range(self.config.hucfg_num_steps):
+            t = step / self.config.hucfg_num_steps
             t = t**hucfg_Kscale
 
             z0 = torch.randn(shape, device=self.device)
