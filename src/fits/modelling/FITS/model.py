@@ -25,7 +25,7 @@ class FITSConfig(ModelConfig):
     lognormal_hucfg_t_sampling: bool = True   # otherwise, uniform
     hucfg_num_steps: int = 500
     first_differences: bool = True
-    conditional: bool = True # TODO: implement OPTIONAL conditional training&sampling: it should take as input not random noise, but observed values (for history (not forecast) timeline) and random noise (as it already does) only for values to be forecasted.
+    conditional: bool = True  # use observed history values for conditioning during training/sampling
 
     def fits_kwargs(self) -> dict[str, int | float | None]:
         return {
@@ -64,8 +64,8 @@ class FITSModel(ForecastingModel):
         self.time_scalar = 1000 ## scale 0-1 to 0-1000 for time embedding
 
     def forward(self, batch: ForecastingData):
-        diffusion_batch, _, _, forecast_mask = self._adapt_batch(batch)
-        return self._train_loss(diffusion_batch, forecast_mask)
+        diffusion_batch, partial_mask, _, forecast_mask = self._adapt_batch(batch)
+        return self._train_loss(diffusion_batch, forecast_mask, partial_mask)
 
     @torch.no_grad()
     def evaluate(self, batch: ForecastingData, n_samples: int) -> ForecastedData:
@@ -102,8 +102,16 @@ class FITSModel(ForecastingModel):
     def _output(self, x: torch.Tensor, t: torch.Tensor):
         return self.model(x, t, padding_masks=None)
 
-    def _train_loss(self, x_start: torch.Tensor, loss_mask: torch.Tensor) -> torch.Tensor:
+    def _train_loss(
+        self,
+        x_start: torch.Tensor,
+        loss_mask: torch.Tensor,
+        partial_mask: torch.Tensor | None = None,
+    ) -> torch.Tensor:
         z0 = torch.randn_like(x_start)
+        if self.config.conditional and partial_mask is not None:
+            z0 = z0.clone()
+            z0[partial_mask] = x_start[partial_mask]
         z1 = x_start
 
         t = torch.rand(z0.shape[0], 1, 1, device=z0.device)
@@ -131,6 +139,9 @@ class FITSModel(ForecastingModel):
         hucfg_Kscale: float = 0.03,
     ) -> torch.Tensor:
         z0 = torch.randn(shape, device=self.device)
+        if self.config.conditional and partial_mask is not None:
+            z0 = z0.clone()
+            z0[partial_mask] = target[partial_mask]
         z1 = zt = z0
 
         for step in range(self.config.hucfg_num_steps):
@@ -138,6 +149,9 @@ class FITSModel(ForecastingModel):
             t = t**hucfg_Kscale
 
             z0 = torch.randn(shape, device=self.device)
+            if self.config.conditional and partial_mask is not None:
+                z0 = z0.clone()
+                z0[partial_mask] = target[partial_mask]
 
             target_t = target * t + z0 * (1 - t)
             zt = z1 * t + z0 * (1 - t)
