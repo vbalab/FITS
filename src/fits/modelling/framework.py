@@ -154,10 +154,10 @@ def Train(
 
     opt = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
 
-    # first 80% epoechs: 1e-3
-    # then  10% epoechs: 1e-3 * 0.1 = 1e-4
+    # first 75% epoechs: 1e-3
+    # then  15% epoechs: 1e-3 * 0.1 = 1e-4
     # then  10% epoechs: 1e-4 * 0.1 = 1e-5
-    p1 = int(0.8 * epochs)
+    p1 = int(0.75 * epochs)
     p2 = int(0.9 * epochs)
 
     scheduler: (

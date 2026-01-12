@@ -3,10 +3,11 @@ import pickle
 from pathlib import Path
 from typing import Sequence
 
-import matplotlib.pyplot as plt
-import numpy as np
 import torch
+import numpy as np
+import matplotlib.pyplot as plt
 from torch import nn
+from sklearn.manifold import TSNE
 
 
 def CalculateParams(model: nn.Module):
@@ -303,14 +304,6 @@ def PlotComparisonTSNE(
     """
     Plot t-SNE comparison between observed series and median forecast series.
     """
-    try:
-        from sklearn.manifold import TSNE
-    except ImportError as exc:  # pragma: no cover - optional dependency
-        raise ImportError(
-            "PlotComparisonTSNE requires scikit-learn. "
-            "Install it with `pip install scikit-learn`."
-        ) from exc
-
     (
         forecasted_data,
         forecast_mask,
