@@ -25,6 +25,7 @@ class FITSConfig(ModelConfig):
     lognormal_hucfg_t_sampling: bool = True   # otherwise, uniform
     hucfg_num_steps: int = 500
     first_differences: bool = True
+    conditional: bool = True # TODO: implement OPTIONAL conditional training&sampling: it should take as input not random noise, but observed values (for history (not forecast) timeline) and random noise (as it already does) only for values to be forecasted.
 
     def fits_kwargs(self) -> dict[str, int | float | None]:
         return {
