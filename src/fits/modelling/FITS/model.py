@@ -24,7 +24,7 @@ class FITSConfig(ModelConfig):
     padding_size: int | None = None
     lognormal_hucfg_t_sampling: bool = True   # otherwise, uniform
     hucfg_num_steps: int = 500
-    first_differences: bool = True # TODO: implement in the model (nothing shouldn't be changed in transformer, only in FITSModel): the model models first differences of time series, not level values
+    first_differences: bool = True
 
     def fits_kwargs(self) -> dict[str, int | float | None]:
         return {
