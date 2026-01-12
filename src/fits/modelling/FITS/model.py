@@ -63,14 +63,14 @@ class FITSModel(ForecastingModel):
         self.time_scalar = 1000 ## scale 0-1 to 0-1000 for time embedding
 
     def forward(self, batch: ForecastingData):
-        diffusion_batch, _ = self._adapt_batch(batch)
+        diffusion_batch, _, _ = self._adapt_batch(batch)
         return self._train_loss(diffusion_batch)
 
     @torch.no_grad()
     def evaluate(self, batch: ForecastingData, n_samples: int) -> ForecastedData:
         self.eval()
 
-        diffusion_batch, partial_mask = self._adapt_batch(batch)
+        diffusion_batch, partial_mask, base_levels = self._adapt_batch(batch)
         batch_size = diffusion_batch.size(0)
 
         samples = []
@@ -87,6 +87,8 @@ class FITSModel(ForecastingModel):
             samples.append(generated)
 
         stacked = torch.stack(samples, dim=1)
+        if self.config.first_differences:
+            stacked = self._restore_levels(stacked, base_levels)
 
         return ForecastedData(
             forecasted_data=stacked,
@@ -147,12 +149,40 @@ class FITSModel(ForecastingModel):
 
         return z1
 
-    def _adapt_batch(self, batch: ForecastingData) -> tuple[torch.Tensor, torch.Tensor]:
+    def _adapt_batch(
+        self, batch: ForecastingData
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         observed_data = batch.observed_data.to(dtype=torch.float32, device=self.device)
-        partial_mask = (
-            (batch.observed_mask * (1 - batch.forecast_mask)).to(self.device).bool()
+        context_mask = (batch.observed_mask * (1 - batch.forecast_mask)).to(
+            self.device
         )
+        partial_mask = context_mask.bool()
         # 0 - to be generated
         # 1 - known at generation
 
-        return observed_data, partial_mask
+        if not self.config.first_differences:
+            return observed_data, partial_mask, observed_data[:, :1]
+
+        diff_data = self._first_differences(observed_data)
+        diff_partial_mask = self._first_difference_mask(partial_mask)
+        base_levels = observed_data[:, :1]
+
+        return diff_data, diff_partial_mask, base_levels
+
+    @staticmethod
+    def _first_differences(data: torch.Tensor) -> torch.Tensor:
+        diffs = torch.zeros_like(data)
+        diffs[:, 1:] = data[:, 1:] - data[:, :-1]
+        return diffs
+
+    @staticmethod
+    def _first_difference_mask(context_mask: torch.Tensor) -> torch.Tensor:
+        diff_mask = torch.zeros_like(context_mask)
+        diff_mask[:, 1:] = context_mask[:, 1:] & context_mask[:, :-1]
+        diff_mask[:, 0] = context_mask[:, 0]
+        return diff_mask
+
+    @staticmethod
+    def _restore_levels(differences: torch.Tensor, base_levels: torch.Tensor) -> torch.Tensor:
+        base = base_levels.unsqueeze(1)
+        return base + differences.cumsum(dim=2)
