@@ -63,14 +63,14 @@ class FITSModel(ForecastingModel):
         self.time_scalar = 1000 ## scale 0-1 to 0-1000 for time embedding
 
     def forward(self, batch: ForecastingData):
-        diffusion_batch, _, _ = self._adapt_batch(batch)
-        return self._train_loss(diffusion_batch)
+        diffusion_batch, _, _, forecast_mask = self._adapt_batch(batch)
+        return self._train_loss(diffusion_batch, forecast_mask)
 
     @torch.no_grad()
     def evaluate(self, batch: ForecastingData, n_samples: int) -> ForecastedData:
         self.eval()
 
-        diffusion_batch, partial_mask, base_levels = self._adapt_batch(batch)
+        diffusion_batch, partial_mask, base_levels, _ = self._adapt_batch(batch)
         batch_size = diffusion_batch.size(0)
 
         samples = []
@@ -101,7 +101,7 @@ class FITSModel(ForecastingModel):
     def _output(self, x: torch.Tensor, t: torch.Tensor):
         return self.model(x, t, padding_masks=None)
 
-    def _train_loss(self, x_start: torch.Tensor) -> torch.Tensor:
+    def _train_loss(self, x_start: torch.Tensor, loss_mask: torch.Tensor) -> torch.Tensor:
         z0 = torch.randn_like(x_start)
         z1 = x_start
 
@@ -115,8 +115,12 @@ class FITSModel(ForecastingModel):
         model_out = self._output(z_t, t.squeeze() * self.time_scalar)
         train_loss = F.mse_loss(model_out, target, reduction="none")
 
-        train_loss = reduce(train_loss, "b ... -> b (...)", "mean")
-        return train_loss.mean()
+        loss_mask = loss_mask.to(device=train_loss.device, dtype=train_loss.dtype)
+        train_loss = train_loss * loss_mask
+
+        loss_sum = reduce(train_loss, "b ... -> b", "sum")
+        mask_sum = reduce(loss_mask, "b ... -> b", "sum").clamp_min(1.0)
+        return (loss_sum / mask_sum).mean()
 
     def fast_sample_infill(
         self,
@@ -151,7 +155,7 @@ class FITSModel(ForecastingModel):
 
     def _adapt_batch(
         self, batch: ForecastingData
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         observed_data = batch.observed_data.to(dtype=torch.float32, device=self.device)
         context_mask = (batch.observed_mask * (1 - batch.forecast_mask)).to(
             self.device
@@ -159,15 +163,16 @@ class FITSModel(ForecastingModel):
         partial_mask = context_mask.bool()
         # 0 - to be generated
         # 1 - known at generation
+        forecast_mask = batch.forecast_mask.to(device=self.device, dtype=torch.float32)
+        base_levels = observed_data[:, :1]
 
         if not self.config.first_differences:
-            return observed_data, partial_mask, observed_data[:, :1]
+            return observed_data, partial_mask, base_levels, forecast_mask
 
         diff_data = self._first_differences(observed_data)
         diff_partial_mask = self._first_difference_mask(partial_mask)
-        base_levels = observed_data[:, :1]
 
-        return diff_data, diff_partial_mask, base_levels
+        return diff_data, diff_partial_mask, base_levels, forecast_mask
 
     @staticmethod
     def _first_differences(data: torch.Tensor) -> torch.Tensor:
