@@ -6,3 +6,4 @@ pydantic>=2.12.5
 pandas-stubs>=2.2.3.241126
 types-requests
 types-tqdm
+scikit-learn-stubs

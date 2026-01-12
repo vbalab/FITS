@@ -14,8 +14,6 @@ from fits.modelling.framework import ForecastedData, ForecastingModel, ModelConf
 
 @dataclass
 class FITSConfig(ModelConfig):
-    """Configuration for the :class:`FITSModel`."""
-
     seq_len: int = 48
     feature_size: int = 36
     n_layer_enc: int = 4
@@ -45,8 +43,6 @@ class FITSConfig(ModelConfig):
 
 
 class FITSModel(ForecastingModel):
-    """FITS implementation using the unified :class:`ForecastingModel` API."""
-
     def __init__(self, config: FITSConfig = FITSConfig()):
         super().__init__(config)
         self.config: FITSConfig = config
@@ -64,8 +60,8 @@ class FITSModel(ForecastingModel):
             conv_params=[config.kernel_size, config.padding_size],
         ).to(self.device)
 
-        self.alpha = 3
-        self.time_scalar = 1000
+        self.alpha = 3          ## t shifting, change to 1 is the uniform sampling during inference
+        self.time_scalar = 1000 ## scale 0-1 to 0-1000 for time embedding
         self.num_timesteps = int(os.environ.get("hucfg_num_steps", "100"))
 
     def forward(self, batch: ForecastingData):
