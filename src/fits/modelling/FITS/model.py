@@ -164,7 +164,12 @@ class FITSModel(ForecastingModel):
             )
 
             z1 = zt.clone() + (1 - t) * v
-            z1 = torch.clamp(z1, min=-1, max=1)
+
+            if self.config.first_differences:
+                z1 = torch.clamp(z1, min=-2, max=2)
+                # in first differences [-1, 1] -> [-2, 2]=[(-1) - (1), 1 - (-1)]
+            else:
+                z1 = torch.clamp(z1, min=-1, max=1)
 
         return z1
 
