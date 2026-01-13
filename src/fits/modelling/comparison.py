@@ -4,7 +4,6 @@ from pathlib import Path
 from typing import Sequence
 
 import torch
-import numpy as np
 import matplotlib.pyplot as plt
 from torch import nn
 from sklearn.manifold import TSNE
@@ -12,6 +11,15 @@ from sklearn.manifold import TSNE
 
 def CalculateParams(model: nn.Module):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+
+def LoadBestModel(model: nn.Module, model_foldername: str, device: torch.device):
+    model_path = f"../data/models/training/{model_foldername}/best_model.pth"
+
+    state = torch.load(model_path, map_location=device)
+
+    model.load_state_dict(state)
+    model.to(device)
 
 
 def ReadMetrics(

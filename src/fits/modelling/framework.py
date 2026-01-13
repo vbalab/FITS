@@ -137,12 +137,12 @@ def Train(
     verbose: bool = True,
     warmup_epochs: int = 10,
     warmup_start_factor: float = 0.1,  # initial lr = lr * warmup_start_factor
+    grad_clip_norm: float | None = 0.3,
     weight_decay: float = 1e-6,
     use_ema: bool = False,
     ema_decay: float = 0.995,  # if use_ema=True
     ema_eval: bool = True,  # if use_ema=True
     ema_save: bool = True,  # if use_ema=True
-    grad_clip_norm: float | None = None,
     folder_name: str | None = None,
 ):
     if not folder_name:

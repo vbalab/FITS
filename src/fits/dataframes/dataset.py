@@ -218,8 +218,8 @@ class DatasetSolar(ForecastingDataset):
         mode: ModelMode,
         seq_len: int = 96,
         horizon: int = 24,
-        train_share: float = 0.95,
-        validation_share: float = 0.02,
+        train_share: float = 0.9,
+        validation_share: float = 0.05,
         normalization: bool = True,
         normalization_stats: NormalizationStats | None = None,
         n_features: int = 128,  # max=137, but default=128 features to match published setups
