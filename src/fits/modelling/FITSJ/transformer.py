@@ -467,6 +467,7 @@ class DecoderBlock(nn.Module):
 
         self.proj = nn.Conv1d(n_channel, n_channel * 2, 1)
         self.linear = nn.Linear(n_embd, n_feat)
+        self.jump_head = nn.Linear(n_embd, n_feat)
 
     def forward(self, x, encoder_output, timestep, mask=None, label_emb=None):
         a, att = self.attn1(self.ln1(x, timestep, label_emb), mask=mask)
@@ -479,7 +480,8 @@ class DecoderBlock(nn.Module):
         x = x + self.mlp(self.ln2(x))
 
         m = torch.mean(x, dim=1, keepdim=True)
-        return x - m, self.linear(m), trend, season
+        jump_score = self.jump_head(x)
+        return x - m, self.linear(m), trend, season, jump_score
 
 
 class Decoder(nn.Module):
@@ -524,16 +526,22 @@ class Decoder(nn.Module):
         mean = []
         season = torch.zeros((b, c, self.d_model), device=x.device)
         trend = torch.zeros((b, c, self.n_feat), device=x.device)
+        jump_scores = torch.zeros((b, c, self.n_feat), device=x.device)
         for block_idx in range(len(self.blocks)):
-            x, residual_mean, residual_trend, residual_season = self.blocks[block_idx](
-                x, enc, t, mask=padding_masks, label_emb=label_emb
-            )
+            (
+                x,
+                residual_mean,
+                residual_trend,
+                residual_season,
+                residual_jump,
+            ) = self.blocks[block_idx](x, enc, t, mask=padding_masks, label_emb=label_emb)
             season += residual_season
             trend += residual_trend
+            jump_scores += residual_jump
             mean.append(residual_mean)
 
         mean = torch.cat(mean, dim=1)
-        return x, mean, trend, season
+        return x, mean, trend, season, jump_scores
 
 
 class Transformer(nn.Module):
@@ -608,6 +616,28 @@ class Transformer(nn.Module):
             condition_dim=n_embd,
             max_len=self.max_len,
         )
+        self.jump_kernel_size = 16
+        self.jump_filter = nn.Conv1d(
+            n_feat,
+            n_feat,
+            kernel_size=self.jump_kernel_size,
+            groups=n_feat,
+            bias=False,
+        )
+        self.jump_gain = nn.Parameter(torch.tensor(1.0))
+        self.jump_scale = nn.Parameter(torch.ones(1, 1, n_feat))
+        with torch.no_grad():
+            lags = torch.arange(self.jump_kernel_size, dtype=torch.float32)
+            decay = torch.exp(-lags / (self.jump_kernel_size / 3))
+            kernel = decay.view(1, 1, -1).repeat(n_feat, 1, 1)
+            self.jump_filter.weight.copy_(kernel)
+
+    def _causal_excitation(self, jump_scores: torch.Tensor) -> torch.Tensor:
+        scores = jump_scores.transpose(1, 2)
+        past_scores = F.pad(scores, (1, 0))[:, :, :-1]
+        padded = F.pad(past_scores, (self.jump_kernel_size - 1, 0))
+        excitation = self.jump_filter(padded)
+        return excitation.transpose(1, 2)
 
     def forward(self, input, t, padding_masks=None, return_res=False):
         emb = self.emb(input)
@@ -616,7 +646,7 @@ class Transformer(nn.Module):
         enc_cond = self.encoder(inp_enc, t, padding_masks=padding_masks)
 
         inp_dec = emb
-        output, mean, trend, season = self.decoder(
+        output, mean, trend, season, jump_scores = self.decoder(
             inp_dec, t, enc_cond, padding_masks=padding_masks
         )
 
@@ -626,6 +656,9 @@ class Transformer(nn.Module):
             self.combine_s(season.transpose(1, 2)).transpose(1, 2) + res - res_m
         )
         trend = self.combine_m(mean) + res_m + trend
-        out = trend + season_error
+        excitation = self._causal_excitation(jump_scores)
+        excited_scores = jump_scores + self.jump_gain * excitation
+        jump_term = excited_scores * self.jump_scale
+        out = trend + season_error + jump_term
 
         return out
