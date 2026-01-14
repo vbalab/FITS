@@ -331,7 +331,7 @@ def Evaluate(
     model: ForecastingModel,
     test_loader: DataLoader,
     normalization: NormalizationStats,
-    nsample: int = 10,
+    nsample: int = 5,
     folder_name: str | None = None,
 ):
     if not folder_name:
