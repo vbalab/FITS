@@ -82,4 +82,14 @@ def DownloadDatasetSolar() -> None:
 
 
 def DownloadDatasetETTh() -> None:
-    ...
+    url = "https://raw.githubusercontent.com/zhouhaoyi/ETDataset/main/ETT-small/ETTh1.csv"
+
+    dataset_path = DatasetsPaths.etth1.value
+    dataset_path.parent.mkdir(parents=True, exist_ok=True)
+
+    with requests.get(url, stream=True) as r:
+        r.raise_for_status()
+        with open(dataset_path, "wb") as f:
+            for chunk in r.iter_content(chunk_size=8192):
+                if chunk:
+                    f.write(chunk)
