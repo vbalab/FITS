@@ -358,3 +358,7 @@ class DatasetSolar(ForecastingDataset):
         scale = torch.where(scale == 0, torch.ones_like(scale), scale)
 
         return (window_data - center) / scale
+
+
+class DatasetETTh(ForecastingDataset):
+    ...

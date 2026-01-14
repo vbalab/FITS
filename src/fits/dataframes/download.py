@@ -79,3 +79,7 @@ def DownloadDatasetSolar() -> None:
             shutil.copyfileobj(gz_file, out_file)
 
     archive_path.unlink()
+
+
+def DownloadDatasetETTh() -> None:
+    ...
