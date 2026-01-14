@@ -371,7 +371,7 @@ class DatasetETTh(ForecastingDataset):
         normalization: bool = True,
         normalization_stats: NormalizationStats | None = None,
     ) -> None:
-        dataset_path = DatasetsPaths.etth1.value
+        dataset_path = DatasetsPaths.etth.value
 
         if not dataset_path.exists():
             raise FileNotFoundError(

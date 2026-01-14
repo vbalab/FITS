@@ -5,7 +5,7 @@ import torch.nn.functional as F
 from einops import reduce
 
 from fits.dataframes.dataset import ForecastingData
-from fits.modelling.FITS.transformer import Transformer
+from fits.modelling.FITSJ.transformer import Transformer, Decomposition
 from fits.modelling.framework import ForecastedData, ForecastingModel, ModelConfig
 
 
@@ -99,6 +99,11 @@ class FITSModel(ForecastingModel):
             time_points=batch.time_points[..., 0].to(self.device, dtype=torch.float32),
         )
 
+    @torch.no_grad()
+    def evaluate_with_decomposition(self, batch: ForecastingData, n_samples: int) -> tuple[ForecastedData, Decomposition]:
+        ...
+        return z1, decomposed
+
     def _output(self, x: torch.Tensor, t: torch.Tensor):
         return self.model(x, t, padding_masks=None)
 
@@ -121,7 +126,7 @@ class FITSModel(ForecastingModel):
         z_t = t * z1 + (1.0 - t) * z0
         target = z1 - z0
 
-        model_out = self._output(z_t, t.squeeze() * self.time_scalar)
+        model_out, _ = self._output(z_t, t.squeeze() * self.time_scalar)
         train_loss = F.mse_loss(model_out, target, reduction="none")
 
         loss_mask = loss_mask.to(device=train_loss.device, dtype=train_loss.dtype)
@@ -159,7 +164,7 @@ class FITSModel(ForecastingModel):
                 zt = zt.clone()
                 zt[partial_mask] = target_t[partial_mask]
 
-            v = self._output(
+            v, _ = self._output(
                 zt, torch.tensor([t * self.time_scalar], device=self.device)
             )
 

@@ -1,11 +1,12 @@
-import math
 import os
+import math
+from dataclasses import dataclass
 
-import numpy as np
 import torch
+import numpy as np
 import torch.nn.functional as F
-from einops import rearrange, reduce, repeat
 from torch import nn
+from einops import rearrange, reduce, repeat
 
 from fits.modelling.FMTS.interpretable_diffusion.model_utils import (
     AdaLayerNorm,
@@ -544,6 +545,14 @@ class Decoder(nn.Module):
         return x, mean, trend, season, jump_scores
 
 
+@dataclass
+class Decomposition():
+    trend: torch.Tensor
+    season: torch.Tensor
+    jump_term: torch.Tensor
+    error: torch.Tensor
+
+
 class Transformer(nn.Module):
     def __init__(
         self,
@@ -652,13 +661,16 @@ class Transformer(nn.Module):
 
         res = self.inverse(output)
         res_m = torch.mean(res, dim=1, keepdim=True)
-        season_error = (
-            self.combine_s(season.transpose(1, 2)).transpose(1, 2) + res - res_m
-        )
+        error = res - res_m
+
         trend = self.combine_m(mean) + res_m + trend
+        season = self.combine_s(season.transpose(1, 2)).transpose(1, 2)
+
         excitation = self._causal_excitation(jump_scores)
         excited_scores = jump_scores + self.jump_gain * excitation
         jump_term = excited_scores * self.jump_scale
-        out = trend + season_error + jump_term
 
-        return out
+        out = trend + season + jump_term + error
+        decomposed = Decomposition(trend, season, jump_term, error)
+
+        return out, decomposed

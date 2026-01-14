@@ -82,9 +82,11 @@ def DownloadDatasetSolar() -> None:
 
 
 def DownloadDatasetETTh() -> None:
-    url = "https://raw.githubusercontent.com/zhouhaoyi/ETDataset/main/ETT-small/ETTh1.csv"
+    url = (
+        "https://raw.githubusercontent.com/zhouhaoyi/ETDataset/main/ETT-small/ETTh1.csv"
+    )
 
-    dataset_path = DatasetsPaths.etth1.value
+    dataset_path = DatasetsPaths.etth.value
     dataset_path.parent.mkdir(parents=True, exist_ok=True)
 
     with requests.get(url, stream=True) as r:
