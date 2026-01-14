@@ -24,6 +24,7 @@ class DatasetsPaths(Enum):
     pm25 = DATASETS_PATH / "pm25/pm25_ground.csv"
     physio = DATASETS_PATH / "physio"  # dir of `.txt`s
     solar = DATASETS_PATH / "solar/solar_AL.txt"
+    etth1 = DATASETS_PATH / "etth/ETTh1.csv"
 
 
 def SeedEverything(seed: int) -> None:
