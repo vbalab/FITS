@@ -155,11 +155,32 @@ def PlotFITSJDecomposition(
 
     forecast_samples = forecasted_data[sample_index]
     forecast_median = forecast_samples.median(dim=0).values
+    forecast_lower, forecast_upper = torch.quantile(
+        forecast_samples, torch.tensor([0.1, 0.9]), dim=0
+    )
 
-    trend_median = decomposed.trend[sample_index].median(dim=0).values.cpu()
-    season_median = decomposed.season[sample_index].median(dim=0).values.cpu()
-    jump_median = decomposed.jump_term[sample_index].median(dim=0).values.cpu()
-    error_median = decomposed.error[sample_index].median(dim=0).values.cpu()
+    trend_samples = decomposed.trend[sample_index].cpu()
+    season_samples = decomposed.season[sample_index].cpu()
+    jump_samples = decomposed.jump_term[sample_index].cpu()
+    error_samples = decomposed.error[sample_index].cpu()
+
+    trend_median = trend_samples.median(dim=0).values
+    season_median = season_samples.median(dim=0).values
+    jump_median = jump_samples.median(dim=0).values
+    error_median = error_samples.median(dim=0).values
+
+    trend_lower, trend_upper = torch.quantile(
+        trend_samples, torch.tensor([0.1, 0.9]), dim=0
+    )
+    season_lower, season_upper = torch.quantile(
+        season_samples, torch.tensor([0.1, 0.9]), dim=0
+    )
+    jump_lower, jump_upper = torch.quantile(
+        jump_samples, torch.tensor([0.1, 0.9]), dim=0
+    )
+    error_lower, error_upper = torch.quantile(
+        error_samples, torch.tensor([0.1, 0.9]), dim=0
+    )
 
     for col_idx, feat in enumerate(selected_features):
         horizon_mask = forecast_mask[sample_index, :, feat].bool()
@@ -172,11 +193,24 @@ def PlotFITSJDecomposition(
 
         observed_denorm = observed_series * scale + center
         forecast_denorm = forecast_median[:, feat] * scale + center
+        forecast_lower_denorm = forecast_lower[:, feat] * scale + center
+        forecast_upper_denorm = forecast_upper[:, feat] * scale + center
 
         trend_denorm = trend_median[:, feat] * scale + center
+        trend_lower_denorm = trend_lower[:, feat] * scale + center
+        trend_upper_denorm = trend_upper[:, feat] * scale + center
+
         season_denorm = season_median[:, feat] * scale
+        season_lower_denorm = season_lower[:, feat] * scale
+        season_upper_denorm = season_upper[:, feat] * scale
+
         jump_denorm = jump_median[:, feat] * scale
+        jump_lower_denorm = jump_lower[:, feat] * scale
+        jump_upper_denorm = jump_upper[:, feat] * scale
+
         error_denorm = error_median[:, feat] * scale
+        error_lower_denorm = error_lower[:, feat] * scale
+        error_upper_denorm = error_upper[:, feat] * scale
 
         axes[0, col_idx].plot(
             time_axis[observed_horizon_mask.numpy()],
@@ -190,6 +224,15 @@ def PlotFITSJDecomposition(
             color="tab:green",
             label="Forecast (median)",
         )
+        axes[0, col_idx].fill_between(
+            time_axis,
+            forecast_lower_denorm.numpy(),
+            forecast_upper_denorm.numpy(),
+            where=horizon_mask.numpy(),
+            alpha=0.3,
+            color="tab:green",
+            label="10–90%",
+        )
         axes[0, col_idx].set_title(f"Feature {feat} | Observed vs Forecast")
         axes[0, col_idx].legend()
         axes[0, col_idx].grid(True)
@@ -197,6 +240,14 @@ def PlotFITSJDecomposition(
         axes[1, col_idx].plot(
             time_axis[horizon_mask.numpy()],
             trend_denorm[horizon_mask].numpy(),
+            color="tab:blue",
+        )
+        axes[1, col_idx].fill_between(
+            time_axis,
+            trend_lower_denorm.numpy(),
+            trend_upper_denorm.numpy(),
+            where=horizon_mask.numpy(),
+            alpha=0.3,
             color="tab:blue",
         )
         axes[1, col_idx].set_title("Trend")
@@ -207,6 +258,14 @@ def PlotFITSJDecomposition(
             season_denorm[horizon_mask].numpy(),
             color="tab:orange",
         )
+        axes[2, col_idx].fill_between(
+            time_axis,
+            season_lower_denorm.numpy(),
+            season_upper_denorm.numpy(),
+            where=horizon_mask.numpy(),
+            alpha=0.3,
+            color="tab:orange",
+        )
         axes[2, col_idx].set_title("Season")
         axes[2, col_idx].grid(True)
 
@@ -215,12 +274,28 @@ def PlotFITSJDecomposition(
             jump_denorm[horizon_mask].numpy(),
             color="tab:red",
         )
+        axes[3, col_idx].fill_between(
+            time_axis,
+            jump_lower_denorm.numpy(),
+            jump_upper_denorm.numpy(),
+            where=horizon_mask.numpy(),
+            alpha=0.3,
+            color="tab:red",
+        )
         axes[3, col_idx].set_title("Jump term")
         axes[3, col_idx].grid(True)
 
         axes[4, col_idx].plot(
             time_axis[horizon_mask.numpy()],
             error_denorm[horizon_mask].numpy(),
+            color="tab:purple",
+        )
+        axes[4, col_idx].fill_between(
+            time_axis,
+            error_lower_denorm.numpy(),
+            error_upper_denorm.numpy(),
+            where=horizon_mask.numpy(),
+            alpha=0.3,
             color="tab:purple",
         )
         axes[4, col_idx].set_title("Error")
