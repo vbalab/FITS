@@ -155,6 +155,9 @@ def PlotFITSJDecomposition(
 
     forecast_samples = forecasted_data[sample_index]
     forecast_median = forecast_samples.median(dim=0).values
+    forecast_lower, forecast_upper = torch.quantile(
+        forecast_samples, torch.tensor([0.1, 0.9]), dim=0
+    )
 
     trend_median = decomposed.trend[sample_index].median(dim=0).values.cpu()
     season_median = decomposed.season[sample_index].median(dim=0).values.cpu()
@@ -172,6 +175,8 @@ def PlotFITSJDecomposition(
 
         observed_denorm = observed_series * scale + center
         forecast_denorm = forecast_median[:, feat] * scale + center
+        forecast_lower_denorm = forecast_lower[:, feat] * scale + center
+        forecast_upper_denorm = forecast_upper[:, feat] * scale + center
 
         trend_denorm = trend_median[:, feat] * scale + center
         season_denorm = season_median[:, feat] * scale
@@ -189,6 +194,15 @@ def PlotFITSJDecomposition(
             forecast_denorm[horizon_mask].numpy(),
             color="tab:green",
             label="Forecast (median)",
+        )
+        axes[0, col_idx].fill_between(
+            time_axis,
+            forecast_lower_denorm.numpy(),
+            forecast_upper_denorm.numpy(),
+            where=horizon_mask.numpy(),
+            alpha=0.3,
+            color="tab:green",
+            label="10–90%",
         )
         axes[0, col_idx].set_title(f"Feature {feat} | Observed vs Forecast")
         axes[0, col_idx].legend()
