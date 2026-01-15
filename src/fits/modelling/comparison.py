@@ -104,11 +104,10 @@ def VisualizeForecastSample(
         upper_np = upper.numpy()
 
         # ---- PLOTTING INTO ax ----
-        ax.scatter(
+        ax.plot(
             time_axis[obs_mask_np],
             obs_series_np[obs_mask_np],
             color="black",
-            s=10,
             label="Observed",
         )
         ax.plot(time_axis, median_np, label="Median", color="tab:green")
