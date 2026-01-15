@@ -659,18 +659,21 @@ class Transformer(nn.Module):
             inp_dec, t, enc_cond, padding_masks=padding_masks
         )
 
-        res = self.inverse(output)
-        res_m = torch.mean(res, dim=1, keepdim=True)
-        error = res - res_m
+        error = self.inverse(output)
+        error_m = torch.mean(error, dim=1, keepdim=True)
+        error = error - error_m
 
-        trend = self.combine_m(mean) + res_m + trend
         season = self.combine_s(season.transpose(1, 2)).transpose(1, 2)
 
         excitation = self._causal_excitation(jump_scores)
         excited_scores = jump_scores + self.jump_gain * excitation
-        jump_term = excited_scores * self.jump_scale
+        jump = excited_scores * self.jump_scale
+        jump_m = torch.mean(jump, dim=1, keepdim=True)
+        jump = jump - jump_m
 
-        out = trend + season + jump_term + error
-        decomposed = Decomposition(trend, season, jump_term, error)
+        trend = self.combine_m(mean) + error_m + jump_m + trend
+
+        out = trend + season + jump + error
+        decomposed = Decomposition(trend, season, jump, error)
 
         return out, decomposed

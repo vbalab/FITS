@@ -366,7 +366,7 @@ class DatasetETTh(ForecastingDataset):
         mode: ModelMode,
         seq_len: int = 96,
         horizon: int = 24,
-        train_share: float = 0.7,
+        train_share: float = 0.8,
         validation_share: float = 0.1,
         normalization: bool = True,
         normalization_stats: NormalizationStats | None = None,

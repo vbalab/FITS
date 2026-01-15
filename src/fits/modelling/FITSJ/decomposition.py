@@ -11,7 +11,7 @@ from tqdm import tqdm
 from fits.config import EVALUATION_PATH
 from fits.dataframes.dataset import NormalizationStats
 from fits.modelling.FITSJ.transformer import Decomposition
-from fits.modelling.framework import ForecastedData, ForecastingModel
+from fits.modelling.FITSJ.model import FITSModel
 
 
 def _normalize_feature_indices(
@@ -27,7 +27,7 @@ def _normalize_feature_indices(
 
 @torch.no_grad()
 def EvaluateFITSJWithDecomposition(
-    model: ForecastingModel,
+    model: FITSModel,
     test_loader: DataLoader,
     normalization: NormalizationStats,
     nsample: int = 5,
@@ -62,7 +62,7 @@ def EvaluateFITSJWithDecomposition(
 
     with tqdm(test_loader, mininterval=5.0, maxinterval=50.0) as it:
         for test_batch in it:
-            forecasted, decomposed = model.evaluate_with_decomposition(
+            forecasted, decomposed = model.decomposition_evaluate(
                 test_batch, nsample
             )
 
@@ -109,7 +109,7 @@ def EvaluateFITSJWithDecomposition(
 
 def PlotFITSJDecomposition(
     eval_foldername: str | Path,
-    nsample: int = 10,
+    nsample: int = 5,
     sample_index: int = 0,
     feature_index: int | Sequence[int] | None = None,
     figsize: tuple[int, int] = (12, 10),
@@ -156,10 +156,10 @@ def PlotFITSJDecomposition(
     forecast_samples = forecasted_data[sample_index]
     forecast_median = forecast_samples.median(dim=0).values
 
-    trend_median = decomposed.trend[sample_index].median(dim=0).values
-    season_median = decomposed.season[sample_index].median(dim=0).values
-    jump_median = decomposed.jump_term[sample_index].median(dim=0).values
-    error_median = decomposed.error[sample_index].median(dim=0).values
+    trend_median = decomposed.trend[sample_index].median(dim=0).values.cpu()
+    season_median = decomposed.season[sample_index].median(dim=0).values.cpu()
+    jump_median = decomposed.jump_term[sample_index].median(dim=0).values.cpu()
+    error_median = decomposed.error[sample_index].median(dim=0).values.cpu()
 
     for col_idx, feat in enumerate(selected_features):
         horizon_mask = forecast_mask[sample_index, :, feat].bool()

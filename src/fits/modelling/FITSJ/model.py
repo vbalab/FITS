@@ -100,7 +100,7 @@ class FITSModel(ForecastingModel):
         )
 
     @torch.no_grad()
-    def evaluate_with_decomposition(self, batch: ForecastingData, n_samples: int) -> tuple[ForecastedData, Decomposition]:
+    def decomposition_evaluate(self, batch: ForecastingData, n_samples: int) -> tuple[ForecastedData, Decomposition]:
         self.eval()
 
         diffusion_batch, partial_mask, base_levels, _ = self._adapt_batch(batch)
