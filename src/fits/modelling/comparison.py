@@ -5,6 +5,7 @@ from typing import Sequence
 
 import torch
 import matplotlib.pyplot as plt
+import numpy as np
 from torch import nn
 from sklearn.manifold import TSNE
 
@@ -340,8 +341,17 @@ def PlotComparisonTSNE(
     forecast_points = forecast_median[valid_time_mask]
 
     data = torch.cat([observed_points, forecast_points], dim=0).numpy()
-    tsne = TSNE(n_components=2, perplexity=perplexity, random_state=random_state)
+    n_samples, n_features = data.shape
+    n_components = 2 if min(n_samples, n_features) >= 2 else 1
+    effective_perplexity = min(perplexity, max(1, n_samples - 1))
+    tsne = TSNE(
+        n_components=n_components,
+        perplexity=effective_perplexity,
+        random_state=random_state,
+    )
     embedding = tsne.fit_transform(data)
+    if n_components == 1:
+        embedding = np.column_stack([embedding, np.zeros_like(embedding)])
 
     n_obs = observed_points.shape[0]
     obs_embed = embedding[:n_obs]
@@ -483,8 +493,17 @@ def _plot_tsne(
     forecast_points = forecast_median[valid_time_mask]
 
     data = torch.cat([observed_points, forecast_points], dim=0).numpy()
-    tsne = TSNE(n_components=2, perplexity=perplexity, random_state=random_state)
+    n_samples, n_features = data.shape
+    n_components = 2 if min(n_samples, n_features) >= 2 else 1
+    effective_perplexity = min(perplexity, max(1, n_samples - 1))
+    tsne = TSNE(
+        n_components=n_components,
+        perplexity=effective_perplexity,
+        random_state=random_state,
+    )
     embedding = tsne.fit_transform(data)
+    if n_components == 1:
+        embedding = np.column_stack([embedding, np.zeros_like(embedding)])
 
     n_obs = observed_points.shape[0]
     obs_embed = embedding[:n_obs]
