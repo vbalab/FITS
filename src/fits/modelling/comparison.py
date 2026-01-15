@@ -267,6 +267,44 @@ def _kde_curve(
     return np.exp(log_density)
 
 
+def _prepare_kde_grid(
+    reference_values: np.ndarray,
+    bins: int,
+    bandwidth: float | None,
+) -> tuple[np.ndarray, float]:
+    data_min, data_max = reference_values.min(), reference_values.max()
+    padding = 0.05 * (data_max - data_min) if data_max > data_min else 1.0
+    grid = np.linspace(data_min - padding, data_max + padding, bins)
+    if bandwidth is None:
+        bandwidth = 0.2 * np.std(reference_values) if np.std(reference_values) > 0 else 1.0
+    return grid, bandwidth
+
+
+def _extract_density_values(
+    forecasted_data: torch.Tensor,
+    forecast_mask: torch.Tensor,
+    observed_data: torch.Tensor,
+    selected_features: Sequence[int],
+    nsample: int,
+) -> tuple[np.ndarray, np.ndarray]:
+    observed_values = observed_data[:, :, selected_features]
+    observed_values = observed_values[forecast_mask[:, :, selected_features].bool()]
+    forecast_values = forecasted_data[:, :, :, selected_features]
+    forecast_mask_samples = forecast_mask[:, :, selected_features].unsqueeze(1)
+    forecast_mask_samples = forecast_mask_samples.expand(
+        -1, nsample, -1, -1
+    ).reshape(forecasted_data.shape[0] * nsample, -1, len(selected_features))
+    forecast_values = forecast_values.reshape(
+        forecasted_data.shape[0] * nsample, -1, len(selected_features)
+    )
+    forecast_values = forecast_values[forecast_mask_samples.bool()]
+
+    if observed_values.numel() == 0 or forecast_values.numel() == 0:
+        raise ValueError("Insufficient data to plot density curves.")
+
+    return observed_values.numpy(), forecast_values.numpy()
+
+
 def PlotComparisonDataDensity(
     eval_foldername: str | Path,
     nsample: int = 10,
@@ -294,29 +332,14 @@ def PlotComparisonDataDensity(
     if not selected_features:
         raise ValueError("No valid feature indices provided.")
 
-    observed_values = observed_data[:, :, selected_features]
-    observed_values = observed_values[forecast_mask[:, :, selected_features].bool()]
-    forecast_values = forecasted_data[:, :, :, selected_features]
-    forecast_mask_samples = forecast_mask[:, :, selected_features].unsqueeze(1)
-    forecast_mask_samples = forecast_mask_samples.expand(
-        -1, nsample, -1, -1
-    ).reshape(forecasted_data.shape[0] * nsample, -1, len(selected_features))
-    forecast_values = forecast_values.reshape(
-        forecasted_data.shape[0] * nsample, -1, len(selected_features)
+    observed_np, forecast_np = _extract_density_values(
+        forecasted_data,
+        forecast_mask,
+        observed_data,
+        selected_features,
+        nsample,
     )
-    forecast_values = forecast_values[forecast_mask_samples.bool()]
-
-    if observed_values.numel() == 0 or forecast_values.numel() == 0:
-        raise ValueError("Insufficient data to plot density curves.")
-
-    observed_np = observed_values.numpy()
-    forecast_np = forecast_values.numpy()
-    combined = np.concatenate([observed_np, forecast_np])
-    data_min, data_max = combined.min(), combined.max()
-    padding = 0.05 * (data_max - data_min) if data_max > data_min else 1.0
-    grid = np.linspace(data_min - padding, data_max + padding, bins)
-    if bandwidth is None:
-        bandwidth = 0.2 * np.std(combined) if np.std(combined) > 0 else 1.0
+    grid, bandwidth = _prepare_kde_grid(observed_np, bins, bandwidth)
 
     observed_density = _kde_curve(observed_np, grid, bandwidth)
     forecast_density = _kde_curve(forecast_np, grid, bandwidth)
@@ -370,12 +393,10 @@ def PlotComparisonPCA(
         seed,
     )
 
-    combined = np.vstack([observed_vectors, forecast_vectors])
     pca = PCA(n_components=2)
-    embedding = pca.fit_transform(combined)
-    n_obs = observed_vectors.shape[0]
-    obs_embed = embedding[:n_obs]
-    gen_embed = embedding[n_obs:]
+    pca.fit(observed_vectors)
+    obs_embed = pca.transform(observed_vectors)
+    gen_embed = pca.transform(forecast_vectors)
 
     plt.figure(figsize=figsize)
     plt.scatter(obs_embed[:, 0], obs_embed[:, 1], s=10, alpha=0.6, label="Original")
@@ -434,8 +455,8 @@ def PlotComparisonTSNE(
         seed,
     )
 
-    data = np.vstack([observed_vectors, forecast_vectors])
-    n_samples = data.shape[0]
+    combined = np.vstack([observed_vectors, forecast_vectors])
+    n_samples = combined.shape[0]
     if n_samples < 2:
         raise ValueError("Not enough samples for t-SNE.")
     effective_perplexity = min(perplexity, max(1, n_samples - 1))
@@ -445,7 +466,7 @@ def PlotComparisonTSNE(
         random_state=random_state,
         init="pca",
     )
-    embedding = tsne.fit_transform(data)
+    embedding = tsne.fit_transform(combined)
     n_obs = observed_vectors.shape[0]
     obs_embed = embedding[:n_obs]
     gen_embed = embedding[n_obs:]
@@ -468,38 +489,14 @@ def PlotComparisonTSNE(
 
 def _plot_data_density(
     ax: plt.Axes,
-    forecasted_data: torch.Tensor,
-    forecast_mask: torch.Tensor,
-    observed_data: torch.Tensor,
-    observed_mask: torch.Tensor,
-    nsample: int,
-    selected_features: Sequence[int],
-    bins: int,
+    observed_np: np.ndarray,
+    forecast_np: np.ndarray,
+    grid: np.ndarray,
+    bandwidth: float,
+    observed_density: np.ndarray | None = None,
 ) -> None:
-    observed_values = observed_data[:, :, selected_features]
-    observed_values = observed_values[forecast_mask[:, :, selected_features].bool()]
-    forecast_values = forecasted_data[:, :, :, selected_features]
-    forecast_mask_samples = forecast_mask[:, :, selected_features].unsqueeze(1)
-    forecast_mask_samples = forecast_mask_samples.expand(
-        -1, nsample, -1, -1
-    ).reshape(forecasted_data.shape[0] * nsample, -1, len(selected_features))
-    forecast_values = forecast_values.reshape(
-        forecasted_data.shape[0] * nsample, -1, len(selected_features)
-    )
-    forecast_values = forecast_values[forecast_mask_samples.bool()]
-
-    if observed_values.numel() == 0 or forecast_values.numel() == 0:
-        raise ValueError("Insufficient data to plot density curves.")
-
-    observed_np = observed_values.numpy()
-    forecast_np = forecast_values.numpy()
-    combined = np.concatenate([observed_np, forecast_np])
-    data_min, data_max = combined.min(), combined.max()
-    padding = 0.05 * (data_max - data_min) if data_max > data_min else 1.0
-    grid = np.linspace(data_min - padding, data_max + padding, bins)
-    bandwidth = 0.2 * np.std(combined) if np.std(combined) > 0 else 1.0
-
-    observed_density = _kde_curve(observed_np, grid, bandwidth)
+    if observed_density is None:
+        observed_density = _kde_curve(observed_np, grid, bandwidth)
     forecast_density = _kde_curve(forecast_np, grid, bandwidth)
 
     ax.plot(grid, observed_density, label="Original", color="tab:red")
@@ -511,32 +508,12 @@ def _plot_data_density(
 
 def _plot_pca(
     ax: plt.Axes,
-    forecasted_data: torch.Tensor,
-    forecast_mask: torch.Tensor,
-    observed_data: torch.Tensor,
-    observed_mask: torch.Tensor,
-    selected_features: Sequence[int],
-    nsample: int,
-    max_points: int,
-    seed: int,
+    observed_vectors: np.ndarray,
+    forecast_vectors: np.ndarray,
+    pca: PCA,
 ) -> None:
-    observed_vectors, forecast_vectors = _flatten_series(
-        observed_data,
-        observed_mask,
-        forecasted_data,
-        forecast_mask,
-        selected_features,
-        nsample,
-        max_points,
-        seed,
-    )
-
-    combined = np.vstack([observed_vectors, forecast_vectors])
-    pca = PCA(n_components=2)
-    embedding = pca.fit_transform(combined)
-    n_obs = observed_vectors.shape[0]
-    obs_embed = embedding[:n_obs]
-    gen_embed = embedding[n_obs:]
+    obs_embed = pca.transform(observed_vectors)
+    gen_embed = pca.transform(forecast_vectors)
 
     ax.scatter(obs_embed[:, 0], obs_embed[:, 1], s=10, alpha=0.6, label="Original")
     ax.scatter(gen_embed[:, 0], gen_embed[:, 1], s=10, alpha=0.6, label="Generated")
@@ -547,44 +524,9 @@ def _plot_pca(
 
 def _plot_tsne(
     ax: plt.Axes,
-    forecasted_data: torch.Tensor,
-    forecast_mask: torch.Tensor,
-    observed_data: torch.Tensor,
-    observed_mask: torch.Tensor,
-    selected_features: Sequence[int],
-    nsample: int,
-    max_points: int,
-    seed: int,
-    perplexity: float,
-    random_state: int,
+    obs_embed: np.ndarray,
+    gen_embed: np.ndarray,
 ) -> None:
-    observed_vectors, forecast_vectors = _flatten_series(
-        observed_data,
-        observed_mask,
-        forecasted_data,
-        forecast_mask,
-        selected_features,
-        nsample,
-        max_points,
-        seed,
-    )
-
-    data = np.vstack([observed_vectors, forecast_vectors])
-    n_samples = data.shape[0]
-    if n_samples < 2:
-        raise ValueError("Not enough samples for t-SNE.")
-    effective_perplexity = min(perplexity, max(1, n_samples - 1))
-    tsne = TSNE(
-        n_components=2,
-        perplexity=effective_perplexity,
-        random_state=random_state,
-        init="pca",
-    )
-    embedding = tsne.fit_transform(data)
-    n_obs = observed_vectors.shape[0]
-    obs_embed = embedding[:n_obs]
-    gen_embed = embedding[n_obs:]
-
     ax.scatter(obs_embed[:, 0], obs_embed[:, 1], s=10, alpha=0.6, label="Original")
     ax.scatter(gen_embed[:, 0], gen_embed[:, 1], s=10, alpha=0.6, label="Generated")
     ax.grid(True)
@@ -617,7 +559,86 @@ def PlotComparisonModelGrid(
     if n_models == 1:
         axes = axes.reshape(nrows, 1)
 
-    for col, eval_foldername in enumerate(eval_foldernames):
+    outputs = [_load_generated_outputs(eval_foldername, nsample) for eval_foldername in eval_foldernames]
+
+    (
+        ref_forecasted_data,
+        ref_forecast_mask,
+        ref_observed_data,
+        ref_observed_mask,
+        _,
+        _,
+        _,
+    ) = outputs[0]
+
+    n_features = ref_observed_data.shape[-1]
+    selected_features = _normalize_feature_indices(feature_index, n_features)
+    if not selected_features:
+        raise ValueError("No valid feature indices provided.")
+
+    ref_observed_np, _ = _extract_density_values(
+        ref_forecasted_data,
+        ref_forecast_mask,
+        ref_observed_data,
+        selected_features,
+        nsample,
+    )
+    grid, bandwidth = _prepare_kde_grid(ref_observed_np, bins, None)
+    ref_observed_density = _kde_curve(ref_observed_np, grid, bandwidth)
+
+    ref_observed_vectors, _ = _flatten_series(
+        ref_observed_data,
+        ref_observed_mask,
+        ref_forecasted_data,
+        ref_forecast_mask,
+        selected_features,
+        nsample,
+        max_points,
+        seed,
+    )
+    pca = PCA(n_components=2)
+    pca.fit(ref_observed_vectors)
+
+    forecast_vectors_list = []
+    for (
+        forecasted_data,
+        forecast_mask,
+        observed_data,
+        observed_mask,
+        _,
+        _,
+        _,
+    ) in outputs:
+        _, forecast_vectors = _flatten_series(
+            observed_data,
+            observed_mask,
+            forecasted_data,
+            forecast_mask,
+            selected_features,
+            nsample,
+            max_points,
+            seed,
+        )
+        forecast_vectors_list.append(forecast_vectors)
+
+    combined = np.vstack([ref_observed_vectors, *forecast_vectors_list])
+    n_samples = combined.shape[0]
+    if n_samples < 2:
+        raise ValueError("Not enough samples for t-SNE.")
+    effective_perplexity = min(perplexity, max(1, n_samples - 1))
+    tsne = TSNE(
+        n_components=2,
+        perplexity=effective_perplexity,
+        random_state=random_state,
+        init="pca",
+    )
+    embedding = tsne.fit_transform(combined)
+    n_obs = ref_observed_vectors.shape[0]
+    obs_embed = embedding[:n_obs]
+    offset = n_obs
+
+    for col, (
+        eval_foldername,
         (
             forecasted_data,
             forecast_mask,
@@ -626,46 +647,35 @@ def PlotComparisonModelGrid(
             _,
             _,
             _,
-        ) = _load_generated_outputs(eval_foldername, nsample)
-
-        n_features = observed_data.shape[-1]
-        selected_features = _normalize_feature_indices(feature_index, n_features)
-        if not selected_features:
-            raise ValueError("No valid feature indices provided.")
-
-        _plot_data_density(
-            axes[0, col],
+        ),
+    ) in enumerate(zip(eval_foldernames, outputs)):
+        _, forecast_np = _extract_density_values(
             forecasted_data,
             forecast_mask,
             observed_data,
-            observed_mask,
-            nsample,
             selected_features,
-            bins,
+            nsample,
+        )
+        _plot_data_density(
+            axes[0, col],
+            ref_observed_np,
+            forecast_np,
+            grid,
+            bandwidth,
+            observed_density=ref_observed_density,
         )
         _plot_pca(
             axes[1, col],
-            forecasted_data,
-            forecast_mask,
-            observed_data,
-            observed_mask,
-            selected_features,
-            nsample,
-            max_points,
-            seed,
+            ref_observed_vectors,
+            forecast_vectors_list[col],
+            pca,
         )
+        gen_embed = embedding[offset : offset + forecast_vectors_list[col].shape[0]]
+        offset += forecast_vectors_list[col].shape[0]
         _plot_tsne(
             axes[2, col],
-            forecasted_data,
-            forecast_mask,
-            observed_data,
-            observed_mask,
-            selected_features,
-            nsample,
-            max_points,
-            seed,
-            perplexity,
-            random_state,
+            obs_embed,
+            gen_embed,
         )
 
         axes[0, col].set_title(model_names[col] if model_names else str(eval_foldername))
