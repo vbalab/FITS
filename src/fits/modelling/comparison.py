@@ -360,3 +360,231 @@ def PlotComparisonTSNE(
     plt.grid(True)
     plt.tight_layout()
     plt.show()
+
+
+def _plot_data_density(
+    ax: plt.Axes,
+    forecasted_data: torch.Tensor,
+    forecast_mask: torch.Tensor,
+    observed_data: torch.Tensor,
+    observed_mask: torch.Tensor,
+    nsample: int,
+    sample_index: int,
+    selected_features: Sequence[int],
+    bins: int,
+) -> None:
+    forecast_samples = forecasted_data[sample_index, :, :, selected_features]
+    forecast_samples = forecast_samples.reshape(-1, len(selected_features))
+    forecast_mask_samples = forecast_mask[sample_index, :, selected_features]
+    forecast_mask_samples = forecast_mask_samples.repeat(nsample, 1, 1).reshape(
+        -1, len(selected_features)
+    )
+
+    observed_series = observed_data[sample_index, :, selected_features]
+    observed_series_mask = observed_mask[sample_index, :, selected_features]
+
+    forecast_values = forecast_samples[forecast_mask_samples.bool()]
+    observed_values = observed_series[observed_series_mask.bool()]
+
+    ax.hist(
+        observed_values.numpy(),
+        bins=bins,
+        density=True,
+        alpha=0.5,
+        label="Observed",
+        color="tab:blue",
+    )
+    ax.hist(
+        forecast_values.numpy(),
+        bins=bins,
+        density=True,
+        alpha=0.5,
+        label="Forecast samples",
+        color="tab:orange",
+    )
+    ax.set_xlabel("Value")
+    ax.set_ylabel("Density")
+    ax.grid(True)
+
+
+def _plot_psa(
+    ax: plt.Axes,
+    forecasted_data: torch.Tensor,
+    forecast_mask: torch.Tensor,
+    observed_data: torch.Tensor,
+    observed_mask: torch.Tensor,
+    sample_index: int,
+    selected_features: Sequence[int],
+    max_points: int,
+    seed: int,
+) -> None:
+    forecast_samples = forecasted_data[sample_index, :, :, selected_features]
+    forecast_median = forecast_samples.median(dim=0).values
+    sample_mask = forecast_mask[sample_index, :, selected_features].bool()
+    observed_series = observed_data[sample_index, :, selected_features]
+    observed_series_mask = observed_mask[sample_index, :, selected_features].bool()
+
+    valid_mask = sample_mask & observed_series_mask
+    forecast_values = forecast_median[valid_mask]
+    observed_values = observed_series[valid_mask]
+
+    if forecast_values.numel() == 0:
+        raise ValueError("No overlapping observed and forecasted values to plot.")
+
+    if forecast_values.numel() > max_points:
+        rng = torch.Generator().manual_seed(seed)
+        indices = torch.randperm(forecast_values.numel(), generator=rng)[:max_points]
+        forecast_values = forecast_values.flatten()[indices]
+        observed_values = observed_values.flatten()[indices]
+
+    ax.scatter(
+        observed_values.numpy(),
+        forecast_values.numpy(),
+        alpha=0.4,
+        s=12,
+        label="Samples",
+    )
+    min_val = min(observed_values.min().item(), forecast_values.min().item())
+    max_val = max(observed_values.max().item(), forecast_values.max().item())
+    ax.plot(
+        [min_val, max_val],
+        [min_val, max_val],
+        color="tab:red",
+        linestyle="--",
+        label="Ideal",
+    )
+    ax.set_xlabel("Observed")
+    ax.set_ylabel("Median forecast")
+    ax.grid(True)
+
+
+def _plot_tsne(
+    ax: plt.Axes,
+    forecasted_data: torch.Tensor,
+    forecast_mask: torch.Tensor,
+    observed_data: torch.Tensor,
+    observed_mask: torch.Tensor,
+    sample_index: int,
+    selected_features: Sequence[int],
+    perplexity: float,
+    random_state: int,
+) -> None:
+    observed_series = observed_data[sample_index, :, selected_features]
+    observed_series_mask = observed_mask[sample_index, :, selected_features].bool()
+    forecast_samples = forecasted_data[sample_index, :, :, selected_features]
+    forecast_median = forecast_samples.median(dim=0).values
+    forecast_mask_series = forecast_mask[sample_index, :, selected_features].bool()
+
+    valid_time_mask = (observed_series_mask & forecast_mask_series).all(dim=-1)
+    if valid_time_mask.sum() < 2:
+        raise ValueError("Not enough valid time steps for t-SNE.")
+
+    observed_points = observed_series[valid_time_mask]
+    forecast_points = forecast_median[valid_time_mask]
+
+    data = torch.cat([observed_points, forecast_points], dim=0).numpy()
+    tsne = TSNE(n_components=2, perplexity=perplexity, random_state=random_state)
+    embedding = tsne.fit_transform(data)
+
+    n_obs = observed_points.shape[0]
+    obs_embed = embedding[:n_obs]
+    forecast_embed = embedding[n_obs:]
+
+    ax.scatter(obs_embed[:, 0], obs_embed[:, 1], label="Observed", alpha=0.7)
+    ax.scatter(
+        forecast_embed[:, 0],
+        forecast_embed[:, 1],
+        label="Median forecast",
+        alpha=0.7,
+    )
+    ax.grid(True)
+
+
+def PlotComparisonModelGrid(
+    eval_foldernames: Sequence[str | Path],
+    nsample: int = 10,
+    sample_index: int = 0,
+    feature_index: int | Sequence[int] | None = None,
+    bins: int = 50,
+    max_points: int = 5000,
+    seed: int = 42,
+    perplexity: float = 30.0,
+    random_state: int = 42,
+    figsize: tuple[int, int] | None = None,
+) -> None:
+    """
+    Plot a comparison grid where rows are plot types and columns are models.
+    """
+    if not eval_foldernames:
+        raise ValueError("At least one evaluation folder name is required.")
+
+    n_models = len(eval_foldernames)
+    nrows = 3
+    if figsize is None:
+        figsize = (4 * n_models, 12)
+    fig, axes = plt.subplots(nrows=nrows, ncols=n_models, figsize=figsize)
+
+    if n_models == 1:
+        axes = axes.reshape(nrows, 1)
+
+    for col, eval_foldername in enumerate(eval_foldernames):
+        (
+            forecasted_data,
+            forecast_mask,
+            observed_data,
+            observed_mask,
+            _,
+            _,
+            _,
+        ) = _load_generated_outputs(eval_foldername, nsample)
+
+        n_features = observed_data.shape[-1]
+        selected_features = _normalize_feature_indices(feature_index, n_features)
+        if not selected_features:
+            raise ValueError("No valid feature indices provided.")
+
+        _plot_data_density(
+            axes[0, col],
+            forecasted_data,
+            forecast_mask,
+            observed_data,
+            observed_mask,
+            nsample,
+            sample_index,
+            selected_features,
+            bins,
+        )
+        _plot_psa(
+            axes[1, col],
+            forecasted_data,
+            forecast_mask,
+            observed_data,
+            observed_mask,
+            sample_index,
+            selected_features,
+            max_points,
+            seed,
+        )
+        _plot_tsne(
+            axes[2, col],
+            forecasted_data,
+            forecast_mask,
+            observed_data,
+            observed_mask,
+            sample_index,
+            selected_features,
+            perplexity,
+            random_state,
+        )
+
+        axes[0, col].set_title(str(eval_foldername))
+
+    row_labels = ["Data Density", "Prediction Scatter", "t-SNE"]
+    for row, label in enumerate(row_labels):
+        axes[row, 0].set_ylabel(label)
+
+    for ax in axes.flatten():
+        ax.legend()
+
+    plt.tight_layout()
+    plt.show()
