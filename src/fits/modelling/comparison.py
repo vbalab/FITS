@@ -215,16 +215,17 @@ def _flatten_series(
     max_points: int | None,
     seed: int,
 ) -> tuple[np.ndarray, np.ndarray]:
+    comparison_mask = forecast_mask[:, :, selected_features]
     feature_means = _compute_feature_means(
         observed_data[:, :, selected_features],
-        observed_mask[:, :, selected_features],
+        comparison_mask,
     )
     observed_filled = _impute_missing(
         observed_data[:, :, selected_features],
-        observed_mask[:, :, selected_features],
+        comparison_mask,
         feature_means,
     )
-    forecast_mask_samples = forecast_mask[:, :, selected_features].unsqueeze(1)
+    forecast_mask_samples = comparison_mask.unsqueeze(1)
     forecast_mask_samples = forecast_mask_samples.expand(
         -1, nsample, -1, -1
     ).reshape(forecasted_data.shape[0] * nsample, *forecast_mask_samples.shape[2:])
@@ -294,7 +295,7 @@ def PlotComparisonDataDensity(
         raise ValueError("No valid feature indices provided.")
 
     observed_values = observed_data[:, :, selected_features]
-    observed_values = observed_values[observed_mask[:, :, selected_features].bool()]
+    observed_values = observed_values[forecast_mask[:, :, selected_features].bool()]
     forecast_values = forecasted_data[:, :, :, selected_features]
     forecast_mask_samples = forecast_mask[:, :, selected_features].unsqueeze(1)
     forecast_mask_samples = forecast_mask_samples.expand(
@@ -476,7 +477,7 @@ def _plot_data_density(
     bins: int,
 ) -> None:
     observed_values = observed_data[:, :, selected_features]
-    observed_values = observed_values[observed_mask[:, :, selected_features].bool()]
+    observed_values = observed_values[forecast_mask[:, :, selected_features].bool()]
     forecast_values = forecasted_data[:, :, :, selected_features]
     forecast_mask_samples = forecast_mask[:, :, selected_features].unsqueeze(1)
     forecast_mask_samples = forecast_mask_samples.expand(
