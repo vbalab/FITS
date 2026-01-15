@@ -101,8 +101,65 @@ class FITSModel(ForecastingModel):
 
     @torch.no_grad()
     def evaluate_with_decomposition(self, batch: ForecastingData, n_samples: int) -> tuple[ForecastedData, Decomposition]:
-        ...
-        return z1, decomposed
+        self.eval()
+
+        diffusion_batch, partial_mask, base_levels, _ = self._adapt_batch(batch)
+        batch_size = diffusion_batch.size(0)
+
+        samples = []
+        trend_samples = []
+        season_samples = []
+        jump_samples = []
+        error_samples = []
+
+        t_input = torch.ones(
+            batch_size, device=diffusion_batch.device, dtype=diffusion_batch.dtype
+        )
+        t_input = t_input * self.time_scalar
+
+        for _ in range(n_samples):
+            generated = self.fast_sample_infill(
+                shape=(batch_size, self.config.seq_len, self.config.feature_size),
+                target=diffusion_batch,
+                partial_mask=partial_mask,
+            )
+            generated = generated.to(
+                diffusion_batch.device,
+                dtype=diffusion_batch.dtype,
+            )
+            samples.append(generated)
+
+            _, decomposed = self._output(generated, t_input)
+            trend_samples.append(decomposed.trend)
+            season_samples.append(decomposed.season)
+            jump_samples.append(decomposed.jump_term)
+            error_samples.append(decomposed.error)
+
+        stacked = torch.stack(samples, dim=1)
+        trend = torch.stack(trend_samples, dim=1)
+        season = torch.stack(season_samples, dim=1)
+        jump_term = torch.stack(jump_samples, dim=1)
+        error = torch.stack(error_samples, dim=1)
+
+        if self.config.first_differences:
+            stacked = self._restore_levels(stacked, base_levels)
+            trend = self._restore_levels(trend, base_levels)
+
+            zero_levels = torch.zeros_like(base_levels)
+            season = self._restore_levels(season, zero_levels)
+            jump_term = self._restore_levels(jump_term, zero_levels)
+            error = self._restore_levels(error, zero_levels)
+
+        return (
+            ForecastedData(
+                forecasted_data=stacked,
+                forecast_mask=batch.forecast_mask.to(self.device, dtype=torch.float32),
+                observed_data=batch.observed_data.to(self.device, dtype=torch.float32),
+                observed_mask=batch.observed_mask.to(self.device, dtype=torch.float32),
+                time_points=batch.time_points[..., 0].to(self.device, dtype=torch.float32),
+            ),
+            Decomposition(trend=trend, season=season, jump_term=jump_term, error=error),
+        )
 
     def _output(self, x: torch.Tensor, t: torch.Tensor):
         return self.model(x, t, padding_masks=None)
