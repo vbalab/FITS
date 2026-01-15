@@ -600,6 +600,7 @@ def PlotComparisonModelGrid(
     perplexity: float = 30.0,
     random_state: int = 42,
     figsize: tuple[int, int] | None = None,
+    model_names: Sequence[str] | None = None,
 ) -> None:
     """
     Plot a comparison grid where rows are plot types and columns are models.
@@ -667,7 +668,7 @@ def PlotComparisonModelGrid(
             random_state,
         )
 
-        axes[0, col].set_title(str(eval_foldername))
+        axes[0, col].set_title(model_names[col] if model_names else str(eval_foldername))
 
     row_labels = ["Data Density", "PCA", "t-SNE"]
     for row, label in enumerate(row_labels):
