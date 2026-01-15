@@ -1,8 +1,8 @@
 # FITS: Flow-based Interpretable Time-Series
 
-FITS is a research codebase for **flow-based, interpretable time-series forecasting**. It
-includes multiple forecasting model families (FITS/FITSJ, CSDI, DiffusionTS, FMTS, and
-VAR baselines), dataset helpers, and training/evaluation utilities built around PyTorch.
+FITS is a modelling framework for **flow-based, interpretable vector time-series forecasting**.
+
+Research codebase includes multiple forecasting model families (**FITS/FITSJ** as primary models, and also _CSDI, DiffusionTS, FMTS, VAR_ as baselines), dataset helpers, and training/evaluation utilities.
 
 ## Features
 

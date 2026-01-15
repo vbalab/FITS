@@ -292,7 +292,7 @@ def PlotComparisonPSA(
     min_val = min(observed_values.min().item(), forecast_values.min().item())
     max_val = max(observed_values.max().item(), forecast_values.max().item())
     plt.plot([min_val, max_val], [min_val, max_val], color="tab:red", linestyle="--")
-    plt.title("Prediction Scatter Analysis")
+    plt.title("PCA")
     plt.xlabel("Observed")
     plt.ylabel("Median forecast")
     plt.grid(True)
@@ -598,7 +598,7 @@ def PlotComparisonModelGrid(
 
         axes[0, col].set_title(str(eval_foldername))
 
-    row_labels = ["Data Density", "Prediction Scatter", "t-SNE"]
+    row_labels = ["Data Density", "PSA", "t-SNE"]
     for row, label in enumerate(row_labels):
         axes[row, 0].set_ylabel(label)
 
