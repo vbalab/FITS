@@ -226,9 +226,9 @@ def _flatten_series(
         feature_means,
     )
     forecast_mask_samples = comparison_mask.unsqueeze(1)
-    forecast_mask_samples = forecast_mask_samples.expand(
-        -1, nsample, -1, -1
-    ).reshape(forecasted_data.shape[0] * nsample, *forecast_mask_samples.shape[2:])
+    forecast_mask_samples = forecast_mask_samples.expand(-1, nsample, -1, -1).reshape(
+        forecasted_data.shape[0] * nsample, *forecast_mask_samples.shape[2:]
+    )
     forecast_filled = _impute_missing(
         forecasted_data[:, :, :, selected_features].reshape(
             forecasted_data.shape[0] * nsample,
@@ -276,7 +276,9 @@ def _prepare_kde_grid(
     padding = 0.05 * (data_max - data_min) if data_max > data_min else 1.0
     grid = np.linspace(data_min - padding, data_max + padding, bins)
     if bandwidth is None:
-        bandwidth = 0.2 * np.std(reference_values) if np.std(reference_values) > 0 else 1.0
+        bandwidth = (
+            0.2 * np.std(reference_values) if np.std(reference_values) > 0 else 1.0
+        )
     return grid, bandwidth
 
 
@@ -291,9 +293,9 @@ def _extract_density_values(
     observed_values = observed_values[forecast_mask[:, :, selected_features].bool()]
     forecast_values = forecasted_data[:, :, :, selected_features]
     forecast_mask_samples = forecast_mask[:, :, selected_features].unsqueeze(1)
-    forecast_mask_samples = forecast_mask_samples.expand(
-        -1, nsample, -1, -1
-    ).reshape(forecasted_data.shape[0] * nsample, -1, len(selected_features))
+    forecast_mask_samples = forecast_mask_samples.expand(-1, nsample, -1, -1).reshape(
+        forecasted_data.shape[0] * nsample, -1, len(selected_features)
+    )
     forecast_values = forecast_values.reshape(
         forecasted_data.shape[0] * nsample, -1, len(selected_features)
     )
@@ -346,7 +348,9 @@ def PlotComparisonDataDensity(
 
     plt.figure(figsize=figsize)
     plt.plot(grid, observed_density, label="Original", color="tab:red")
-    plt.plot(grid, forecast_density, label="Generated", color="tab:blue", linestyle="--")
+    plt.plot(
+        grid, forecast_density, label="Generated", color="tab:blue", linestyle="--"
+    )
     plt.title("Data Density Comparison")
     plt.xlabel("Data Value")
     plt.ylabel("Data Density Estimate")
@@ -559,7 +563,10 @@ def PlotComparisonModelGrid(
     if n_models == 1:
         axes = axes.reshape(nrows, 1)
 
-    outputs = [_load_generated_outputs(eval_foldername, nsample) for eval_foldername in eval_foldernames]
+    outputs = [
+        _load_generated_outputs(eval_foldername, nsample)
+        for eval_foldername in eval_foldernames
+    ]
 
     (
         ref_forecasted_data,
@@ -678,7 +685,9 @@ def PlotComparisonModelGrid(
             gen_embed,
         )
 
-        axes[0, col].set_title(model_names[col] if model_names else str(eval_foldername))
+        axes[0, col].set_title(
+            model_names[col] if model_names else str(eval_foldername)
+        )
 
     row_labels = ["Data Density", "PCA", "t-SNE"]
     for row, label in enumerate(row_labels):

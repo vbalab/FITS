@@ -535,7 +535,9 @@ class Decoder(nn.Module):
                 residual_trend,
                 residual_season,
                 residual_jump,
-            ) = self.blocks[block_idx](x, enc, t, mask=padding_masks, label_emb=label_emb)
+            ) = self.blocks[block_idx](
+                x, enc, t, mask=padding_masks, label_emb=label_emb
+            )
             season += residual_season
             trend += residual_trend
             jump_scores += residual_jump
@@ -546,7 +548,7 @@ class Decoder(nn.Module):
 
 
 @dataclass
-class Decomposition():
+class Decomposition:
     trend: torch.Tensor
     season: torch.Tensor
     jump_term: torch.Tensor

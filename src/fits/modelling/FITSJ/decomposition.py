@@ -62,9 +62,7 @@ def EvaluateFITSJWithDecomposition(
 
     with tqdm(test_loader, mininterval=5.0, maxinterval=50.0) as it:
         for test_batch in it:
-            forecasted, decomposed = model.decomposition_evaluate(
-                test_batch, nsample
-            )
+            forecasted, decomposed = model.decomposition_evaluate(test_batch, nsample)
 
             all_forecasted_data.append(forecasted.forecasted_data)
             all_forecast_mask.append(forecasted.forecast_mask)

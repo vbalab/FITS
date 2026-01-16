@@ -22,10 +22,12 @@ class FITSConfig(ModelConfig):
     resid_pd: float = 0.0
     kernel_size: int | None = None
     padding_size: int | None = None
-    lognormal_hucfg_t_sampling: bool = True   # otherwise, uniform
+    lognormal_hucfg_t_sampling: bool = True  # otherwise, uniform
     hucfg_num_steps: int = 500
     first_differences: bool = True
-    conditional: bool = True  # use observed history values for conditioning during training/sampling
+    conditional: bool = (
+        True  # use observed history values for conditioning during training/sampling
+    )
 
     def fits_kwargs(self) -> dict[str, int | float | None]:
         return {
@@ -61,7 +63,7 @@ class FITSModel(ForecastingModel):
             conv_params=[config.kernel_size, config.padding_size],
         ).to(self.device)
 
-        self.time_scalar = 1000 ## scale 0-1 to 0-1000 for time embedding
+        self.time_scalar = 1000  ## scale 0-1 to 0-1000 for time embedding
 
     def forward(self, batch: ForecastingData):
         diffusion_batch, partial_mask, _, forecast_mask = self._adapt_batch(batch)
@@ -177,9 +179,7 @@ class FITSModel(ForecastingModel):
         self, batch: ForecastingData
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         observed_data = batch.observed_data.to(dtype=torch.float32, device=self.device)
-        context_mask = (batch.observed_mask * (1 - batch.forecast_mask)).to(
-            self.device
-        )
+        context_mask = (batch.observed_mask * (1 - batch.forecast_mask)).to(self.device)
         partial_mask = context_mask.bool()
         # 0 - to be generated
         # 1 - known at generation
@@ -208,6 +208,8 @@ class FITSModel(ForecastingModel):
         return diff_mask
 
     @staticmethod
-    def _restore_levels(differences: torch.Tensor, base_levels: torch.Tensor) -> torch.Tensor:
+    def _restore_levels(
+        differences: torch.Tensor, base_levels: torch.Tensor
+    ) -> torch.Tensor:
         base = base_levels.unsqueeze(1)
         return base + differences.cumsum(dim=2)
