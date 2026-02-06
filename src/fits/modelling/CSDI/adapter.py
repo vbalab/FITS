@@ -80,16 +80,12 @@ class CSDIAdapter(ForecastingModel):
 
         return ForecastedData(
             forecasted_data=samples,
-            observed_data=(
-                batch.observed_data.to(device=self.device, dtype=torch.float32)
-                if self.config.first_differences
-                else observed_data.permute(0, 2, 1)
-            ),  # TODO: change to batch.observed_data
-            observed_mask=(
-                batch.observed_mask.to(device=self.device, dtype=torch.float32)
-                if self.config.first_differences
-                else observed_mask.permute(0, 2, 1)
-            ),  # TODO: change to batch.observed_mask
+            observed_data=batch.observed_data.to(
+                device=self.device, dtype=torch.float32
+            ),
+            observed_mask=batch.observed_mask.to(
+                device=self.device, dtype=torch.float32
+            ),
             forecast_mask=batch.forecast_mask.to(
                 device=self.device, dtype=torch.float32
             ),
