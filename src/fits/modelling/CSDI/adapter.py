@@ -76,6 +76,8 @@ class CSDIAdapter(ForecastingModel):
             base_levels = batch.observed_data.to(
                 device=self.device, dtype=torch.float32
             )[:, :1]
+            context_mask = csdi_batch["gt_mask"] > 0.1
+            samples[context_mask] = csdi_batch["observed_data"][context_mask]
             samples = self._restore_levels(samples, base_levels)
 
         return ForecastedData(
