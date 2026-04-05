@@ -3,3 +3,8 @@ numpy>=1.26
 pandas>=2.2
 torch>=2.5
 tqdm
+# Required by SSSD/S4Model
+einops>=0.7
+opt_einsum>=3.3
+scipy>=1.13
+lightning>=2.0
