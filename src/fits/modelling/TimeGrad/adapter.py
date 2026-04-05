@@ -50,8 +50,8 @@ class TimeGradConfig(ModelConfig):
     beta_schedule: Literal["linear", "quad", "cosine"] = "linear"
 
     # --- EpsilonTheta backbone ----------------------------------------------
-    residual_layers: int = 8
-    residual_channels: int = 8
+    residual_layers: int = 12
+    residual_channels: int = 32
     dilation_cycle_length: int = 2
 
     # --- Preprocessing ------------------------------------------------------

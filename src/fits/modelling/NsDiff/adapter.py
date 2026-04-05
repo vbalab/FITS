@@ -61,11 +61,11 @@ class NsDiffConfig(ModelConfig):
     beta_schedule: Literal["linear", "cosine", "quad"] = "linear"
 
     # --- Mu backbone (Non-stationary Transformer) ----------------------------
-    d_model: int = 512
-    n_heads: int = 8
+    d_model: int = 64
+    n_heads: int = 4
     e_layers: int = 2
     d_layers: int = 1
-    d_ff: int = 1024
+    d_ff: int = 128
     factor: int = 3
     dropout: float = 0.05
     activation: str = "gelu"
@@ -76,7 +76,7 @@ class NsDiffConfig(ModelConfig):
     CART_input_x_embed_dim: int = 32
 
     # --- Sigma backbone (SigmaEstimation) ------------------------------------
-    sigma_hidden_size: int = 512
+    sigma_hidden_size: int = 64
     rolling_length: int = 96  # trailing window for sigma estimation
 
     # --- Preprocessing -------------------------------------------------------

@@ -40,7 +40,7 @@ class FALDAConfig(ModelConfig):
 
     # --- DEMA denoiser -------------------------------------------------------
     dema_d_model: int = 64
-    dema_n_layers: int = 3
+    dema_n_layers: int = 5
     dema_ma_kernel: int = 25  # moving-average kernel size inside DEMA
 
     # --- Diffusion schedule --------------------------------------------------

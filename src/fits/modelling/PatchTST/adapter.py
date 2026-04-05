@@ -40,10 +40,10 @@ class PatchTSTConfig(ModelConfig):
     padding_patch: str = "end"  # pad end so all time steps are covered
 
     # --- Transformer ---------------------------------------------------------
-    d_model: int = 128
-    n_heads: int = 16
+    d_model: int = 96
+    n_heads: int = 4
     n_layers: int = 3
-    d_ff: int = 256
+    d_ff: int = 192
     dropout: float = 0.2
     attn_dropout: float = 0.0
     fc_dropout: float = 0.2

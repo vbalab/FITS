@@ -43,9 +43,9 @@ class MrDiffConfig(ModelConfig):
     beta_end: float = 0.1
 
     # --- Denoising network ---------------------------------------------------
-    d_model: int = 64  # channel dim inside denoising nets
-    d_emb: int = 64  # diffusion step embedding dim
-    n_layers: int = 3  # conv layers per encoder/decoder
+    d_model: int = 48  # channel dim inside denoising nets
+    d_emb: int = 48  # diffusion step embedding dim
+    n_layers: int = 2  # conv layers per encoder/decoder
     conv_kernel: int = 3  # conv kernel size
 
     # --- Training ------------------------------------------------------------

@@ -40,13 +40,13 @@ class SSSDConfig(ModelConfig):
     seq_len: int = 96  # total sequence length (context + horizon)
 
     # --- SSSDS4 architecture -------------------------------------------------
-    res_channels: int = 256
-    skip_channels: int = 256
-    num_res_layers: int = 36
-    diffusion_step_embed_dim_in: int = 128
-    diffusion_step_embed_dim_mid: int = 512
-    diffusion_step_embed_dim_out: int = 512
-    s4_d_state: int = 64
+    res_channels: int = 24
+    skip_channels: int = 24
+    num_res_layers: int = 8
+    diffusion_step_embed_dim_in: int = 64
+    diffusion_step_embed_dim_mid: int = 128
+    diffusion_step_embed_dim_out: int = 128
+    s4_d_state: int = 16
     s4_dropout: float = 0.0
     s4_bidirectional: bool = True
     s4_layernorm: bool = True

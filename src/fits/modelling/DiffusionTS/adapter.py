@@ -16,9 +16,9 @@ class DiffusionTSConfig(ModelConfig):
 
     seq_len: int = 96
     feature_size: int = 7
-    n_layer_enc: int = 3
-    n_layer_dec: int = 3
-    d_model: int = 96  # 4 X 24
+    n_layer_enc: int = 2
+    n_layer_dec: int = 2
+    d_model: int = 64
     timesteps: int = 500
     sampling_timesteps: int = 500
     # fast_sampling = sampling_timesteps < timesteps; if True, leads to dramatic decrease in sampling quality (500&200 was worse than 200&200)

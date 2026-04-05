@@ -41,10 +41,10 @@ class ITransformerConfig(ModelConfig):
     pred_len: int = 24  # forecast horizon
 
     # --- Transformer ---------------------------------------------------------
-    d_model: int = 512
-    n_heads: int = 8
-    e_layers: int = 4  # number of encoder layers
-    d_ff: int = 512
+    d_model: int = 128
+    n_heads: int = 4
+    e_layers: int = 2  # number of encoder layers
+    d_ff: int = 256
     dropout: float = 0.1
     activation: Literal["relu", "gelu"] = "gelu"
     factor: int = 1  # attention factor (unused by FullAttention)
