@@ -8,3 +8,5 @@ einops>=0.7
 opt_einsum>=3.3
 scipy>=1.13
 lightning>=2.0
+# Required by NsDiff
+torch-timeseries==0.1.10
