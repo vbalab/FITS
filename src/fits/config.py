@@ -21,10 +21,11 @@ EVALUATION_PATH.mkdir(parents=True, exist_ok=True)
 
 
 class DatasetsPaths(Enum):
-    pm25 = DATASETS_PATH / "pm25/pm25_ground.csv"
-    physio = DATASETS_PATH / "physio"  # dir of `.txt`s
     solar = DATASETS_PATH / "solar/solar_AL.txt"
     etth = DATASETS_PATH / "etth/ETTh1.csv"
+    electricity = DATASETS_PATH / "electricity/electricity.txt"
+    exchange = DATASETS_PATH / "exchange/exchange_rate.txt"
+    weather = DATASETS_PATH / "weather/weather.csv"
 
 
 def SeedEverything(seed: int) -> None:

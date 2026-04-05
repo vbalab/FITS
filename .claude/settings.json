@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find /Users/vbalab/all/study/ysda/courses/project/FITS/src -name \"*.py\" -type f -exec wc -l {} +)",
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "Bash(python -m ruff check src)",
+      "Bash(python -m black --check src)",
+      "Bash(python -m ruff check src/fits/config.py src/fits/dataframes/dataset.py src/fits/dataframes/download.py)",
+      "Bash(python -c \"from fits.dataframes.download import DownloadDatasetWeather; DownloadDatasetWeather\\(\\)\")"
+    ]
+  }
+}

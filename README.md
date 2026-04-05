@@ -6,8 +6,8 @@ Research codebase includes multiple forecasting model families (**FITS/FITSJ** a
 
 ## Features
 
-- **Dataset utilities** for popular forecasting benchmarks (air quality, PhysioNet,
-  solar energy, and ETT).
+- **Dataset utilities** for popular forecasting benchmarks (solar energy, ETT,
+  electricity, exchange rate, and weather).
 - **Model zoo** covering FITS/FITSJ, diffusion-based approaches, and baselines like
   VAR.
 - **Training and evaluation helpers** with EMA support, learning-rate scheduling, and
@@ -16,7 +16,7 @@ Research codebase includes multiple forecasting model families (**FITS/FITSJ** a
 
 ## Project structure
 
-```
+```txt
 src/fits/
   config.py              # paths + global seeding helpers
   dataframes/            # datasets, dataloaders, download utilities
@@ -40,17 +40,18 @@ pip install -r requirements.txt
 Dataset utilities live in `fits.dataframes.download`. The following helpers download
 and unpack benchmark data to `data/datasets/`:
 
-- `DownloadDatasetAirQuality()`
-- `DownloadDatasetPhysio()`
 - `DownloadDatasetSolar()`
 - `DownloadDatasetETTh()`
+- `DownloadDatasetElectricity()`
+- `DownloadDatasetExchange()`
+- `DownloadDatasetWeather()`
 
 Example:
 
 ```python
-from fits.dataframes.download import DownloadDatasetAirQuality
+from fits.dataframes.download import DownloadDatasetElectricity
 
-DownloadDatasetAirQuality()
+DownloadDatasetElectricity()
 ```
 
 ## Training example
@@ -59,15 +60,15 @@ Below is a minimal sketch showing how to create loaders and train a model.
 
 ```python
 from fits.dataframes.dataloader import ForecastingDataLoader
-from fits.dataframes.dataset import DatasetAirQuality
+from fits.dataframes.dataset import DatasetElectricity
 from fits.modelling.FITS.model import FITS, FITSConfig
 from fits.modelling.framework import Train
 
 train_loader, valid_loader, test_loader = ForecastingDataLoader(
-    DatasetAirQuality,
+    DatasetElectricity,
     batch_size=128,
-    seq_len=48,
-    horizon=6,
+    seq_len=96,
+    horizon=24,
 )
 
 model = FITS(FITSConfig())
