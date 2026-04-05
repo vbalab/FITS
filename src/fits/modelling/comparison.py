@@ -16,6 +16,17 @@ def CalculateParams(model: nn.Module):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 
+def CalculateModelSizeMB(model: nn.Module) -> float:
+    """Return total memory footprint of a model in megabytes.
+
+    Includes both trainable parameters and registered buffers (e.g. diffusion
+    schedule tensors stored via ``register_buffer``).
+    """
+    param_bytes = sum(p.numel() * p.element_size() for p in model.parameters())
+    buffer_bytes = sum(b.numel() * b.element_size() for b in model.buffers())
+    return (param_bytes + buffer_bytes) / (1024**2)
+
+
 def LoadBestModel(model: nn.Module, model_foldername: str, device: torch.device):
     model_path = f"../data/models/training/{model_foldername}/best_model.pth"
 
