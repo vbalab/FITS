@@ -57,7 +57,7 @@ class ForecastingModel(nn.Module, ABC):
         return self.config.name or self.__class__.__name__
 
     @abstractmethod
-    def forward(self, batch: ForecastingData):
+    def forward(self, batch: ForecastingData) -> torch.Tensor:
         """Compute the training loss for a batch."""
 
     @abstractmethod
