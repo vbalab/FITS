@@ -30,7 +30,7 @@ class TimeGradConfig(ModelConfig):
     # --- Dataset dimensions -------------------------------------------------
     feature_size: int = 7
     seq_len: int = 96
-    prediction_length: int = 24  # last N steps of seq_len to generate
+    pred_len: int = 24  # last N steps of seq_len to generate
 
     # --- RNN encoder --------------------------------------------------------
     num_cells: int = 64
@@ -141,7 +141,7 @@ class TimeGradAdapter(ForecastingModel):
         cond_shifted = torch.cat([zeros, cond[:, :-1]], dim=1)  # [B, L, C]
 
         # Compute diffusion loss only on the forecast horizon positions
-        horizon = self.config.prediction_length
+        horizon = self.config.pred_len
         x_target = x[:, -horizon:].contiguous()  # [B, horizon, K]
         cond_target = cond_shifted[:, -horizon:].contiguous()  # [B, horizon, C]
 
@@ -155,7 +155,7 @@ class TimeGradAdapter(ForecastingModel):
     def evaluate(self, batch: ForecastingData, n_samples: int) -> ForecastedData:
         x, obs_mask, fcst_mask, scale = self._adapt_batch(batch)
         B, L, K = x.shape
-        horizon = self.config.prediction_length
+        horizon = self.config.pred_len
         context_len = L - horizon
 
         # Encode the context region with the RNN

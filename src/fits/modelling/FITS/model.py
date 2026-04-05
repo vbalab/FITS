@@ -11,8 +11,8 @@ from fits.modelling.framework import ForecastedData, ForecastingModel, ModelConf
 
 @dataclass
 class FITSConfig(ModelConfig):
-    seq_len: int = 48
-    feature_size: int = 36
+    seq_len: int = 96
+    feature_size: int = 7
     n_layer_enc: int = 4
     n_layer_dec: int = 4
     d_model: int = 64

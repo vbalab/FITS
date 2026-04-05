@@ -14,8 +14,8 @@ from fits.modelling.framework import ForecastedData, ForecastingModel, ModelConf
 class DiffusionTSConfig(ModelConfig):
     """Typed configuration for the :class:`DiffusionTSAdapter`."""
 
-    seq_len: int = 48
-    feature_size: int = 36
+    seq_len: int = 96
+    feature_size: int = 7
     n_layer_enc: int = 3
     n_layer_dec: int = 3
     d_model: int = 96  # 4 X 24

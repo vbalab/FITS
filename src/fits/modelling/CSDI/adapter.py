@@ -22,12 +22,12 @@ class CSDIDiffusionConfig:
 
 @dataclass
 class CSDIConfig(ModelConfig):
-    target_dim: int = 36
+    feature_size: int = 7
     time_embedding_dim: int = 128
     feature_embedding_dim: int = 16
     is_unconditional: bool = False
     target_strategy: Literal["mix", "random", "historical"] = "mix"
-    num_sample_features: int = 64  # > 36 -> no feature sampling
+    num_sample_features: int = 64  # > feature_size -> no feature sampling
     first_differences: bool = False
     diffusion: CSDIDiffusionConfig = field(default_factory=CSDIDiffusionConfig)
 
@@ -47,7 +47,7 @@ class CSDIConfig(ModelConfig):
 class CSDIAdapter(ForecastingModel):
     def __init__(self, config: CSDIConfig = CSDIConfig()):
         super().__init__(config)
-        self.target_dim = config.target_dim
+        self.target_dim = config.feature_size
 
         self.csdi_model = CSDI_Forecasting(
             config=config.as_csdi_dict(),
