@@ -72,12 +72,15 @@ class CSDIAdapter(ForecastingModel):
         )
 
         samples = samples.permute(0, 1, 3, 2)
+
+        mask = (csdi_batch["gt_mask"] > 0.1).unsqueeze(1)
+        obs  = csdi_batch["observed_data"].unsqueeze(1)
+        samples = torch.where(mask, obs, samples)
+
         if self.config.first_differences:
             base_levels = batch.observed_data.to(
                 device=self.device, dtype=torch.float32
             )[:, :1]
-            context_mask = csdi_batch["gt_mask"] > 0.1
-            samples[context_mask] = csdi_batch["observed_data"][context_mask]
             samples = self._restore_levels(samples, base_levels)
 
         return ForecastedData(
