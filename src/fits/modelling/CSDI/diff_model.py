@@ -1,7 +1,8 @@
 import math
+
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
+from torch import nn
 
 
 def get_torch_trans(heads=8, layers=1, channels=64):

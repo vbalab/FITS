@@ -1,17 +1,17 @@
-import os
 import math
+import os
 from dataclasses import dataclass
 
-import torch
 import numpy as np
+import torch
 import torch.nn.functional as F
-from torch import nn
 from einops import rearrange, reduce, repeat
+from torch import nn
 
 from fits.modelling.FMTS.interpretable_diffusion.model_utils import (
+    GELU2,
     AdaLayerNorm,
     Conv_MLP,
-    GELU2,
     RMSNorm,
     Transpose,
 )
@@ -24,7 +24,7 @@ class TrendBlock(nn.Module):
     """
 
     def __init__(self, in_dim, out_dim, in_feat, out_feat, act):
-        super(TrendBlock, self).__init__()
+        super().__init__()
         trend_poly = 3
         self.trend = nn.Sequential(
             nn.Conv1d(
@@ -110,7 +110,7 @@ class SeasonBlock(nn.Module):
     """
 
     def __init__(self, in_dim, out_dim, factor=1):
-        super(SeasonBlock, self).__init__()
+        super().__init__()
         season_poly = factor * min(32, int(out_dim // 2))
         self.season = nn.Conv1d(
             in_channels=in_dim, out_channels=season_poly, kernel_size=1, padding=0

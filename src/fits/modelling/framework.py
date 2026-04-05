@@ -1,18 +1,17 @@
 import pickle
-from typing import Optional
-from datetime import datetime
-from dataclasses import dataclass
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from datetime import datetime
 
-import torch
-import numpy as np
 import matplotlib.pyplot as plt
-from torch import nn
-from tqdm import tqdm
-from torch.utils.data import DataLoader
+import numpy as np
+import torch
 from IPython.display import clear_output
+from torch import nn
+from torch.utils.data import DataLoader
+from tqdm import tqdm
 
-from fits.config import TRAINING_PATH, EVALUATION_PATH
+from fits.config import EVALUATION_PATH, TRAINING_PATH
 from fits.dataframes.dataset import ForecastingData, NormalizationStats
 
 
@@ -38,7 +37,7 @@ class ModelConfig:
     dictionaries.
     """
 
-    name: Optional[str] = None
+    name: str | None = None
 
 
 class ForecastingModel(nn.Module, ABC):
@@ -71,7 +70,7 @@ class EMA:
     """Exponential Moving Average of model parameters."""
 
     decay: float = 0.999
-    device: Optional[torch.device] = (
+    device: torch.device | None = (
         None  # e.g. torch.device("cpu") to store EMA on CPU
     )
 

@@ -5,7 +5,7 @@ import torch.nn.functional as F
 from einops import reduce
 
 from fits.dataframes.dataset import ForecastingData
-from fits.modelling.FITSJ.transformer import Transformer, Decomposition
+from fits.modelling.FITSJ.transformer import Decomposition, Transformer
 from fits.modelling.framework import ForecastedData, ForecastingModel, ModelConfig
 
 

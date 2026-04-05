@@ -1,12 +1,8 @@
 import math
-import scipy
+
 import torch
 import torch.nn.functional as F
-
-from torch import nn, einsum
-from functools import partial
-from einops import rearrange, reduce
-from scipy.fftpack import next_fast_len
+from torch import nn
 
 
 def exists(x):
@@ -148,7 +144,7 @@ class LearnablePositionalEncoding(nn.Module):
     """
 
     def __init__(self, d_model, dropout=0.1, max_len=1024):
-        super(LearnablePositionalEncoding, self).__init__()
+        super().__init__()
         self.dropout = nn.Dropout(p=dropout)
         # Each position gets its own embedding
         # Since indices are always 0 ... max_len, we don't have to do a look-up
@@ -176,7 +172,7 @@ class moving_avg(nn.Module):
     """
 
     def __init__(self, kernel_size, stride):
-        super(moving_avg, self).__init__()
+        super().__init__()
         self.kernel_size = kernel_size
         self.avg = nn.AvgPool1d(kernel_size=kernel_size, stride=stride, padding=0)
 
@@ -198,7 +194,7 @@ class series_decomp(nn.Module):
     """
 
     def __init__(self, kernel_size):
-        super(series_decomp, self).__init__()
+        super().__init__()
         self.moving_avg = moving_avg(kernel_size, stride=1)
 
     def forward(self, x):
@@ -213,7 +209,7 @@ class series_decomp_multi(nn.Module):
     """
 
     def __init__(self, kernel_size):
-        super(series_decomp_multi, self).__init__()
+        super().__init__()
         self.moving_avg = [moving_avg(kernel, stride=1) for kernel in kernel_size]
         self.layer = torch.nn.Linear(1, len(kernel_size))
 
@@ -234,7 +230,7 @@ class Transpose(nn.Module):
     """Wrapper class of torch.transpose() for Sequential module."""
 
     def __init__(self, shape: tuple):
-        super(Transpose, self).__init__()
+        super().__init__()
         self.shape = shape
 
     def forward(self, x):

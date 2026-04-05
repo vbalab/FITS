@@ -4,10 +4,10 @@ from typing import Literal
 import torch
 
 from fits.dataframes.dataset import ForecastingData
-from fits.modelling.framework import ForecastedData, ForecastingModel, ModelConfig
 from fits.modelling.DiffusionTS.interpretable_diffusion.gaussian_diffusion import (
     Diffusion_TS,
 )
+from fits.modelling.framework import ForecastedData, ForecastingModel, ModelConfig
 
 
 @dataclass

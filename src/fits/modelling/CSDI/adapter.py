@@ -3,9 +3,9 @@ from typing import Literal
 
 import torch
 
+from fits.dataframes.dataset import ForecastingData
 from fits.modelling.CSDI.model import CSDI_Forecasting
 from fits.modelling.framework import ForecastedData, ForecastingModel, ModelConfig
-from fits.dataframes.dataset import ForecastingData
 
 
 @dataclass
@@ -74,7 +74,7 @@ class CSDIAdapter(ForecastingModel):
         samples = samples.permute(0, 1, 3, 2)
 
         mask = (csdi_batch["gt_mask"] > 0.1).unsqueeze(1)
-        obs  = csdi_batch["observed_data"].unsqueeze(1)
+        obs = csdi_batch["observed_data"].unsqueeze(1)
         samples = torch.where(mask, obs, samples)
 
         if self.config.first_differences:

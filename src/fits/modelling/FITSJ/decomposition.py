@@ -1,17 +1,17 @@
 import pickle
+from collections.abc import Sequence
 from datetime import datetime
 from pathlib import Path
-from typing import Sequence
 
-import torch
 import matplotlib.pyplot as plt
+import torch
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from fits.config import EVALUATION_PATH
 from fits.dataframes.dataset import NormalizationStats
-from fits.modelling.FITSJ.transformer import Decomposition
 from fits.modelling.FITSJ.model import FITSModel
+from fits.modelling.FITSJ.transformer import Decomposition
 
 
 def _normalize_feature_indices(

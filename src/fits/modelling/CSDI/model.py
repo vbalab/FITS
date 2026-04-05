@@ -1,6 +1,7 @@
-import torch
 import numpy as np
-import torch.nn as nn
+import torch
+from torch import nn
+
 from fits.modelling.CSDI.diff_model import diff_CSDI
 
 
@@ -301,7 +302,7 @@ class CSDI_base(nn.Module):
 
 class CSDI_Forecasting(CSDI_base):
     def __init__(self, config, device, target_dim):
-        super(CSDI_Forecasting, self).__init__(target_dim, config, device)
+        super().__init__(target_dim, config, device)
 
         self.target_dim_base = target_dim
         self.num_sample_features = config["model"]["num_sample_features"]

@@ -1,14 +1,14 @@
 import math
+from functools import partial
+
 import torch
 import torch.nn.functional as F
-
-from torch import nn
 from einops import reduce
+from torch import nn
 from tqdm.auto import tqdm
-from functools import partial
+
 from .model_utils import default, extract, identity
 from .transformer import Transformer
-
 
 # gaussian diffusion trainer class
 
@@ -56,7 +56,7 @@ class Diffusion_TS(nn.Module):
         reg_weight=None,
         **kwargs,
     ):
-        super(Diffusion_TS, self).__init__()
+        super().__init__()
 
         self.eta, self.use_ff = eta, use_ff
         self.seq_length = seq_length

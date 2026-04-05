@@ -1,11 +1,9 @@
-import math
 import os
 
 import torch
 import torch.nn.functional as F
 from einops import reduce
 from torch import nn
-from tqdm.auto import tqdm
 
 from fits.modelling.FMTS.interpretable_diffusion.transformer import Transformer
 
@@ -26,7 +24,7 @@ class FM_TS(nn.Module):
         padding_size=None,
         **kwargs,
     ):
-        super(FM_TS, self).__init__()
+        super().__init__()
 
         self.seq_length = seq_length
         self.feature_size = feature_size

@@ -1,11 +1,11 @@
+import gzip
 import shutil
 import tarfile
 import zipfile
-import gzip
+
 import requests
 
 from fits.config import DATASETS_PATH, DatasetsPaths
-
 
 headers = {
     "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36"

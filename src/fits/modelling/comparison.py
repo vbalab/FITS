@@ -1,15 +1,15 @@
 import math
 import pickle
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Sequence
 
-import torch
 import matplotlib.pyplot as plt
 import numpy as np
-from torch import nn
+import torch
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
 from sklearn.neighbors import KernelDensity
+from torch import nn
 
 
 def CalculateParams(model: nn.Module):
