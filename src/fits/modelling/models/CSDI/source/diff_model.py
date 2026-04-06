@@ -11,6 +11,7 @@ def get_torch_trans(heads=8, layers=1, channels=64):
         nhead=heads,
         dim_feedforward=64,
         activation="gelu",
+        batch_first=True,
     )
     return nn.TransformerEncoder(encoder_layer, num_layers=layers)
 
@@ -112,7 +113,7 @@ class ResidualBlock(nn.Module):
             y.reshape(B, C, K, L).permute(0, 2, 1, 3).reshape(B * K, C, L)
         )  # [B * K, C, L]
 
-        y = self.time_layer(y.permute(2, 0, 1)).permute(1, 2, 0)
+        y = self.time_layer(y.permute(0, 2, 1)).permute(0, 2, 1)
 
         y = (
             y.reshape(B, K, C, L).permute(0, 2, 1, 3).reshape(B, C, K * L)
@@ -130,7 +131,7 @@ class ResidualBlock(nn.Module):
             y.reshape(B, C, K, L).permute(0, 3, 1, 2).reshape(B * L, C, K)
         )  # [B * L, C, K]
 
-        y = self.feature_layer(y.permute(2, 0, 1)).permute(1, 2, 0)
+        y = self.feature_layer(y.permute(0, 2, 1)).permute(0, 2, 1)
 
         y = (
             y.reshape(B, L, C, K).permute(0, 2, 3, 1).reshape(B, C, K * L)
