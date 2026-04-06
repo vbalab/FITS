@@ -5,7 +5,6 @@ Usage:
 """
 
 import logging
-import traceback
 
 import matplotlib
 from tqdm import tqdm
@@ -112,22 +111,18 @@ def _run_all(
         folder = f"{model_name}_{dataset_name}"
         tqdm.write(f"▶ {model_name} on {dataset_name}")
 
-        try:
-            model = factory(feature_size)
-            TrainAndEvaluate(
-                model=model,
-                dataset_cls=dataset_cls,
-                batch_size=batch_size,
-                epochs=epochs,
-                dataset_kwargs=ds_kwargs,
-                nsample=nsample,
-                verbose=False,
-                folder_name=folder,
-            )
-            tqdm.write(f"  ✓ done → {folder}")
-        except Exception:  # noqa: BLE001
-            tqdm.write(f"  ✗ FAILED: {model_name} on {dataset_name}")
-            traceback.print_exc()
+        model = factory(feature_size)
+        TrainAndEvaluate(
+            model=model,
+            dataset_cls=dataset_cls,
+            batch_size=batch_size,
+            epochs=epochs,
+            dataset_kwargs=ds_kwargs,
+            nsample=nsample,
+            verbose=False,
+            folder_name=folder,
+        )
+        tqdm.write(f"  ✓ done → {folder}")
 
 
 if __name__ == "__main__":

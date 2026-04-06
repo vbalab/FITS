@@ -194,12 +194,13 @@ def Train(
 
     metrics: dict[str, list[tuple[int, float]]] = {"train_loss": [], "test_loss": []}
     best_valid_loss = float("inf")
+    best_valid_epoch = -1
 
     for epoch_no in range(epochs):
         epoch_loss = 0.0
         model.train()
 
-        with tqdm(train_loader) as it:
+        with tqdm(train_loader, leave=False) as it:
             for batch_no, train_batch in enumerate(it, start=1):
                 opt.zero_grad()
 
@@ -235,7 +236,7 @@ def Train(
             valid_batches = 0
 
             with torch.no_grad():
-                with tqdm(valid_loader) as it:
+                with tqdm(valid_loader, leave=False) as it:
                     for batch_no, valid_batch in enumerate(it, start=1):
                         loss = model(valid_batch)
                         valid_loss += loss.item()
@@ -256,7 +257,7 @@ def Train(
                 torch.save(model.state_dict(), folder_path / "best_model.pth")
 
                 best_valid_loss = avg_valid_loss
-                print("\n best loss is updated to ", avg_valid_loss, "at", epoch_no)
+                best_valid_epoch = epoch_no
 
             if ema and ema_eval:
                 ema.restore(model)
@@ -296,6 +297,8 @@ def Train(
 
         if ema and ema_save:
             ema.restore(model)
+
+    tqdm.write(f"  best loss: {best_valid_loss:.6f} at epoch {best_valid_epoch}")
 
 
 def CalcQuantileLoss(target, forecast, q: float, eval_points) -> torch.Tensor:
