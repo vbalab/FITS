@@ -2,6 +2,7 @@ import pickle
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Any
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -12,7 +13,12 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from fits.config import EVALUATION_PATH, TRAINING_PATH
-from fits.dataframes.dataset import ForecastingData, NormalizationStats
+from fits.dataframes.dataloader import ForecastingDataLoader
+from fits.dataframes.dataset import (
+    ForecastingData,
+    ForecastingDataset,
+    NormalizationStats,
+)
 
 
 @dataclass
@@ -255,27 +261,33 @@ def Train(
             if ema and ema_eval:
                 ema.restore(model)
 
+        # Always save metrics to disk so they survive regardless of verbose
+        import json  # noqa: PLC0415
+
+        with open(folder_path / "metrics.json", "w") as _f:
+            json.dump(metrics, _f)
+
+        # Always save the plot; only display it interactively when verbose=True
         if verbose:
             clear_output(True)
-            plt.figure(figsize=(12, 4))
-
-            for i, (name, history) in enumerate(sorted(metrics.items())):
-                plt.subplot(1, len(metrics), i + 1)
-                plt.title(name)
-                plt.plot(*zip(*history))
-                plt.grid()
-
-            plt.gca().text(
-                0.02,
-                0.98,
-                f"lr = {opt.param_groups[0]['lr']:.2e}",
-                transform=plt.gca().transAxes,
-                va="top",
-                ha="left",
-            )
-
-            plt.savefig(folder_path / "training.png")
+        fig = plt.figure(figsize=(12, 4))
+        for i, (name, history) in enumerate(sorted(metrics.items())):
+            plt.subplot(1, len(metrics), i + 1)
+            plt.title(name)
+            plt.plot(*zip(*history, strict=False))
+            plt.grid()
+        plt.gca().text(
+            0.02,
+            0.98,
+            f"lr = {opt.param_groups[0]['lr']:.2e}",
+            transform=plt.gca().transAxes,
+            va="top",
+            ha="left",
+        )
+        plt.savefig(folder_path / "training.png")
+        if verbose:
             plt.show()
+        plt.close(fig)
 
         if ema and ema_save:
             ema.apply(model)
@@ -438,3 +450,98 @@ def Evaluate(
     print("MAE:", mae)
     print("CRPS:", crps)
     print("CRPS_sum:", crps_sum)
+
+
+def TrainAndEvaluate(
+    model: ForecastingModel,
+    dataset_cls: type[ForecastingDataset],
+    # --- data ---
+    batch_size: int = 128,
+    num_workers: int = 0,
+    dataset_kwargs: dict[str, Any] | None = None,
+    # --- training ---
+    lr: float = 1.0e-3,
+    epochs: int = 500,
+    valid_epoch_interval: int = 20,
+    verbose: bool = True,
+    warmup_epochs: int = 10,
+    warmup_start_factor: float = 0.1,
+    grad_clip_norm: float | None = 0.3,
+    weight_decay: float = 1.0e-6,
+    use_ema: bool = False,
+    ema_decay: float = 0.995,
+    ema_eval: bool = True,
+    ema_save: bool = True,
+    # --- evaluation ---
+    nsample: int = 5,
+    # --- shared ---
+    folder_name: str | None = None,
+) -> None:
+    """Train a model, load the best checkpoint, then evaluate on the test set.
+
+    Combines :func:`ForecastingDataLoader`, :func:`Train`, and
+    :func:`Evaluate` into a single convenience call.  The ``folder_name``
+    is shared between training (checkpoint) and evaluation (results) so
+    both artefacts end up under the same name in their respective
+    ``data/models/`` sub-directories.
+
+    Args:
+        model:               Model to train and evaluate.
+        dataset_cls:         Dataset class (e.g. ``DatasetETTh``).
+        batch_size:          Batch size for all data loaders.
+        num_workers:         DataLoader worker processes.
+        dataset_kwargs:      Extra keyword arguments forwarded to the
+                             dataset constructor (e.g. ``seq_len``, ``horizon``).
+        folder_name:         Optional name for checkpoint / results folders.
+                             Auto-generated from model name + timestamp if omitted.
+        All remaining args:  Forwarded verbatim to :func:`Train` / :func:`Evaluate`.
+    """
+    if dataset_kwargs is None:
+        dataset_kwargs = {}
+
+    if not folder_name:
+        current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+        folder_name = f"{model.model_name}_{current_time}"
+
+    # Build loaders
+    train_loader, valid_loader, test_loader = ForecastingDataLoader(
+        dataset_cls,
+        batch_size=batch_size,
+        num_workers=num_workers,
+        **dataset_kwargs,
+    )
+
+    # Train — saves best_model.pth under TRAINING_PATH / folder_name
+    Train(
+        model=model,
+        train_loader=train_loader,
+        valid_loader=valid_loader,
+        lr=lr,
+        epochs=epochs,
+        valid_epoch_interval=valid_epoch_interval,
+        verbose=verbose,
+        warmup_epochs=warmup_epochs,
+        warmup_start_factor=warmup_start_factor,
+        grad_clip_norm=grad_clip_norm,
+        weight_decay=weight_decay,
+        use_ema=use_ema,
+        ema_decay=ema_decay,
+        ema_eval=ema_eval,
+        ema_save=ema_save,
+        folder_name=folder_name,
+    )
+
+    # Load the best checkpoint saved by Train()
+    best_ckpt = TRAINING_PATH / folder_name / "best_model.pth"
+    model.load_state_dict(torch.load(best_ckpt, map_location=model.device))
+
+    # Evaluate on test set using normalization stats from the training split
+    normalization = train_loader.dataset.normalization_stats  # type: ignore[union-attr]
+
+    Evaluate(
+        model=model,
+        test_loader=test_loader,
+        normalization=normalization,
+        nsample=nsample,
+        folder_name=folder_name,
+    )

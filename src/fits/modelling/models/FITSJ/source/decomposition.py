@@ -11,6 +11,7 @@ from tqdm import tqdm
 from fits.config import EVALUATION_PATH
 from fits.dataframes.dataset import NormalizationStats
 from fits.modelling.models.FITSJ.model import FITSModel
+
 from .transformer import Decomposition
 
 

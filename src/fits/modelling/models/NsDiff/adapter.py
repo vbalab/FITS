@@ -6,6 +6,7 @@ import torch
 
 from fits.dataframes.dataset import ForecastingData
 from fits.modelling.framework import ForecastedData, ForecastingModel, ModelConfig
+
 from .source.g_backbone import SigmaEstimation
 from .source.model import NsDiff as NsDiffModel
 from .source.mu_backbone import Model as MuBackbone

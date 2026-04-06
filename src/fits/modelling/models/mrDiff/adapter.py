@@ -4,6 +4,7 @@ import torch
 
 from fits.dataframes.dataset import ForecastingData
 from fits.modelling.framework import ForecastedData, ForecastingModel, ModelConfig
+
 from .source.model import MrDiff, build_trend_sequence
 
 

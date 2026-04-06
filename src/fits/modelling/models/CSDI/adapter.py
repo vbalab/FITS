@@ -4,8 +4,9 @@ from typing import Literal
 import torch
 
 from fits.dataframes.dataset import ForecastingData
-from .source.model import CSDI_Forecasting
 from fits.modelling.framework import ForecastedData, ForecastingModel, ModelConfig
+
+from .source.model import CSDI_Forecasting
 
 
 @dataclass

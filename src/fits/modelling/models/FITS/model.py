@@ -5,8 +5,9 @@ import torch.nn.functional as F
 from einops import reduce
 
 from fits.dataframes.dataset import ForecastingData
-from .source.transformer import Transformer
 from fits.modelling.framework import ForecastedData, ForecastingModel, ModelConfig
+
+from .source.transformer import Transformer
 
 
 @dataclass

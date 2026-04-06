@@ -7,6 +7,7 @@ import torch.nn.functional as F  # noqa: N812
 
 from fits.dataframes.dataset import ForecastingData
 from fits.modelling.framework import ForecastedData, ForecastingModel, ModelConfig
+
 from .source.model import Model as ITransformerModel
 
 

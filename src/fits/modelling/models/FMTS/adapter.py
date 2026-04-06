@@ -3,8 +3,9 @@ from dataclasses import dataclass
 import torch
 
 from fits.dataframes.dataset import ForecastingData
-from .source.interpretable_diffusion.FMTS import FM_TS
 from fits.modelling.framework import ForecastedData, ForecastingModel, ModelConfig
+
+from .source.interpretable_diffusion.FMTS import FM_TS
 
 
 @dataclass

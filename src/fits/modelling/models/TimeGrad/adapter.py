@@ -6,6 +6,7 @@ from torch import nn
 
 from fits.dataframes.dataset import ForecastingData
 from fits.modelling.framework import ForecastedData, ForecastingModel, ModelConfig
+
 from .source.epsilon_theta import EpsilonTheta
 from .source.gaussian_diffusion import GaussianDiffusion
 

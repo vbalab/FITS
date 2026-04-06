@@ -5,6 +5,7 @@ import torch.nn.functional as F  # noqa: N812
 
 from fits.dataframes.dataset import ForecastingData
 from fits.modelling.framework import ForecastedData, ForecastingModel, ModelConfig
+
 from .source.layers.PatchTST_backbone import PatchTST_backbone
 
 
