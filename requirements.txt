@@ -1,6 +1,7 @@
 requests>=2.32
 numpy>=1.26
 pandas>=2.2
+# Install with: pip install -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cu124
 torch>=2.5
 tqdm
 # Required by SSSD/S4Model
