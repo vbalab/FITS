@@ -21,7 +21,7 @@ os.environ["CUDA_VISIBLE_DEVICES"] = f"{GPUs[0]}"
 
 # -----
 
-import logging
+import logging  # noqa: E402
 
 import matplotlib
 from tqdm import tqdm
