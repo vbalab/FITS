@@ -6,9 +6,9 @@
 # Requires: torch-timeseries==0.1.10
 import torch
 import torch.nn as nn
-from torch_timeseries.nn.Transformer_EncDec import Decoder, DecoderLayer, Encoder, EncoderLayer
-from torch_timeseries.nn.SelfAttention_Family import DSAttention, AttentionLayer
-from torch_timeseries.nn.embedding import DataEmbedding
+from .Transformer_EncDec import Decoder, DecoderLayer, Encoder, EncoderLayer
+from .SelfAttention_Family import DSAttention, AttentionLayer
+from .embedding import DataEmbedding
 import torch.nn.functional as F
 from .sigma import wv_sigma, wv_sigma_trailing   # changed: was `from src.utils.sigma import ...`
 

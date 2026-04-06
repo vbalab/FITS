@@ -1,0 +1,4 @@
+# ruff: noqa
+# Source: https://github.com/wayne155/pytorch_timeseries
+# File: torch_timeseries/nn/Transformer_EncDec.py — reproduced verbatim, pure PyTorch.
+

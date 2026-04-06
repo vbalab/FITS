@@ -6,7 +6,7 @@
 # Requires: torch-timeseries==0.1.10
 import torch
 import torch.nn as nn
-from torch_timeseries.nn.embedding import DataEmbedding
+from .embedding import DataEmbedding
 import yaml
 import argparse
 from .tmdm_diffusion_utils import *                    # changed: was `from src.nn.tmdm_diffusion_utils import *`

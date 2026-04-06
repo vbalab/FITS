@@ -1,13 +1,13 @@
 # ruff: noqa
 # Source: https://github.com/wwy155/NsDiff
 # File: src/layer/mu_backbone.py
-# Reproduced verbatim. Requires: torch-timeseries==0.1.10
-# No import changes — torch_timeseries is a pip package.
+# Reproduced verbatim. Three torch_timeseries imports converted to relative
+# (Transformer_EncDec, SelfAttention_Family, embedding are copied into source/).
 import torch
 import torch.nn as nn
-from torch_timeseries.nn.Transformer_EncDec import Decoder, DecoderLayer, Encoder, EncoderLayer
-from torch_timeseries.nn.SelfAttention_Family import DSAttention, AttentionLayer
-from torch_timeseries.nn.embedding import DataEmbedding
+from .Transformer_EncDec import Decoder, DecoderLayer, Encoder, EncoderLayer
+from .SelfAttention_Family import DSAttention, AttentionLayer
+from .embedding import DataEmbedding
 
 
 class Projector(nn.Module):
