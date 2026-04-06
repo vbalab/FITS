@@ -373,6 +373,7 @@ class DatasetElectricity(ForecastingDataset):
         validation_share: float = 0.1,
         normalization: bool = True,
         normalization_stats: NormalizationStats | None = None,
+        n_features: int = 321,  # max=321; use fewer for faster experiments
     ) -> None:
         dataset_path = DatasetsPaths.electricity.value
 
@@ -386,6 +387,7 @@ class DatasetElectricity(ForecastingDataset):
         if df.shape[1] > 0 and df.iloc[:, -1].isna().all():
             df = df.iloc[:, :-1]
 
+        df = df.iloc[:, :n_features]
         values = df.to_numpy(dtype=np.float32)
         mask = ~np.isnan(values)
         np.nan_to_num(values, nan=0.0, copy=False)
@@ -520,6 +522,7 @@ class DatasetExchange(ForecastingDataset):
         validation_share: float = 0.1,
         normalization: bool = True,
         normalization_stats: NormalizationStats | None = None,
+        n_features: int = 8,  # max=8
     ) -> None:
         dataset_path = DatasetsPaths.exchange.value
 
@@ -533,6 +536,7 @@ class DatasetExchange(ForecastingDataset):
         if df.shape[1] > 0 and df.iloc[:, -1].isna().all():
             df = df.iloc[:, :-1]
 
+        df = df.iloc[:, :n_features]
         values = df.to_numpy(dtype=np.float32)
         mask = ~np.isnan(values)
         np.nan_to_num(values, nan=0.0, copy=False)
@@ -667,6 +671,7 @@ class DatasetWeather(ForecastingDataset):
         validation_share: float = 0.1,
         normalization: bool = True,
         normalization_stats: NormalizationStats | None = None,
+        n_features: int = 21,  # max=21
     ) -> None:
         dataset_path = DatasetsPaths.weather.value
 
@@ -679,7 +684,9 @@ class DatasetWeather(ForecastingDataset):
         df = pd.read_csv(dataset_path, parse_dates=["date"])
         df = df.sort_values("date")
 
-        values = df.drop(columns=["date"]).to_numpy(dtype=np.float32)
+        values = df.drop(columns=["date"]).iloc[:, :n_features].to_numpy(
+            dtype=np.float32
+        )
         mask = ~np.isnan(values)
         np.nan_to_num(values, nan=0.0, copy=False)
 
