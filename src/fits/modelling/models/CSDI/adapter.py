@@ -71,8 +71,9 @@ class CSDIAdapter(ForecastingModel):
         samples, observed_data, target_mask, observed_mask, time_points = (
             self.csdi_model.evaluate(csdi_batch, n_samples)
         )
-        # CSDI receives [B, L, K] input (our ForecastingData format) and returns
-        # samples in the same [B, n_samples, L, K] layout — no permute needed.
+        # CSDI outputs [B, n_samples, K, L] (feature-first); permute to [B, n_samples, L, K]
+        # so it matches the [B, L, K] convention used by gt_mask and observed_data below.
+        samples = samples.permute(0, 1, 3, 2)
 
         mask = (csdi_batch["gt_mask"] > 0.1).unsqueeze(1)
         obs = csdi_batch["observed_data"].unsqueeze(1)
