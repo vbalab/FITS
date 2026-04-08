@@ -5,18 +5,18 @@ Usage:
 """
 
 
-import os
+# import os
 
-GPUs = [
-    "GPU-e83bd31b-fcb9-b8de-f617-2d717619413b",
-    "GPU-5a9b7750-9f85-49a5-3aae-fe07b1b7661d",
-    "GPU-fe2d8dfd-06f2-a5c4-a7fd-4a5f23947005",
-    "GPU-0c320096-21ee-4060-8731-826ca2febfab",
-    "GPU-baef952c-6609-aace-3b78-e4e07788d5de",
-    "GPU-3979d65b-c238-4e9c-0c1c-1aa3f05c56a1",
-    "GPU-6c76a2c5-5375-aa06-11d4-0fddfac30e91",
-]
-os.environ["CUDA_VISIBLE_DEVICES"] = f"{GPUs[0]}"
+# GPUs = [
+#     "GPU-e83bd31b-fcb9-b8de-f617-2d717619413b",
+#     "GPU-5a9b7750-9f85-49a5-3aae-fe07b1b7661d",
+#     "GPU-fe2d8dfd-06f2-a5c4-a7fd-4a5f23947005",
+#     "GPU-0c320096-21ee-4060-8731-826ca2febfab",
+#     "GPU-baef952c-6609-aace-3b78-e4e07788d5de",
+#     "GPU-3979d65b-c238-4e9c-0c1c-1aa3f05c56a1",
+#     "GPU-6c76a2c5-5375-aa06-11d4-0fddfac30e91",
+# ]
+# os.environ["CUDA_VISIBLE_DEVICES"] = f"{GPUs[0]}"
 
 
 # -----
@@ -152,7 +152,7 @@ def _run_combos(combos: list, first_differences: bool, epochs: int, batch_size: 
 
 def _run_all(
     epochs: int = 200,
-    batch_size: int = 128,
+    batch_size: int = 128 * 4,
     nsample: int = 10,
 ) -> None:
     _ensure_datasets()

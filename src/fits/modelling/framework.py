@@ -1,3 +1,4 @@
+import json
 import pickle
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -137,13 +138,13 @@ def Train(
     train_loader: DataLoader,
     valid_loader: DataLoader,
     lr: float = 1.0e-3,
-    epochs: int = 500,
-    valid_epoch_interval: int = 20,
+    epochs: int = 200,
+    valid_epoch_interval: int = 10,
     verbose: bool = True,
     warmup_epochs: int = 10,
     warmup_start_factor: float = 0.1,  # initial lr = lr * warmup_start_factor
     grad_clip_norm: float | None = 0.3,
-    weight_decay: float = 1e-4,
+    weight_decay: float = 1.0e-5,
     use_ema: bool = False,
     ema_decay: float = 0.995,  # if use_ema=True
     ema_eval: bool = True,  # if use_ema=True
@@ -261,9 +262,6 @@ def Train(
 
             if ema and ema_eval:
                 ema.restore(model)
-
-        # Always save metrics to disk so they survive regardless of verbose
-        import json  # noqa: PLC0415
 
         with open(folder_path / "metrics.json", "w") as _f:
             json.dump(metrics, _f)
@@ -464,19 +462,19 @@ def TrainAndEvaluate(
     dataset_kwargs: dict[str, Any] | None = None,
     # --- training ---
     lr: float = 1.0e-3,
-    epochs: int = 500,
-    valid_epoch_interval: int = 20,
+    epochs: int = 200,
+    valid_epoch_interval: int = 10,
     verbose: bool = True,
     warmup_epochs: int = 10,
     warmup_start_factor: float = 0.1,
     grad_clip_norm: float | None = 0.3,
-    weight_decay: float = 1.0e-6,
+    weight_decay: float = 1.0e-5,
     use_ema: bool = False,
     ema_decay: float = 0.995,
     ema_eval: bool = True,
     ema_save: bool = True,
     # --- evaluation ---
-    nsample: int = 5,
+    nsample: int = 10,
     # --- shared ---
     folder_name: str | None = None,
 ) -> None:

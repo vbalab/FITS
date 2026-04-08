@@ -10,3 +10,4 @@ opt_einsum>=3.3
 pykeops>=2.1
 scipy>=1.13
 lightning>=2.0
+matplotlib

@@ -2,3 +2,6 @@
 *.out
 *__pycache__
 notes.md
+fits.egg-info
+Dockerfile
+build_docker.sh
