@@ -22,7 +22,7 @@ Usage:
 # -----
 
 import gc
-import logging  # noqa: E402
+import logging
 import time
 
 import matplotlib
@@ -30,6 +30,9 @@ import torch  # noqa: E402
 from tqdm import tqdm
 
 matplotlib.use("Agg")  # non-interactive backend — safe for scripts
+
+# pyKeOps prints a deprecation warning every Cauchy kernel call; silence it
+logging.getLogger("pykeops").setLevel(logging.ERROR)
 
 from fits.dataframes.dataset import (
     DatasetElectricity,
