@@ -21,9 +21,12 @@ os.environ["CUDA_VISIBLE_DEVICES"] = f"{GPUs[0]}"
 
 # -----
 
+import gc
 import logging  # noqa: E402
+import time
 
 import matplotlib
+import torch  # noqa: E402
 from tqdm import tqdm
 
 matplotlib.use("Agg")  # non-interactive backend — safe for scripts
@@ -127,17 +130,24 @@ def _run_combos(combos: list, first_differences: bool, epochs: int, batch_size: 
         tqdm.write(f"▶ {model_name} on {dataset_name} (first_differences={first_differences})")
 
         model = factory(feature_size, first_differences)
-        TrainAndEvaluate(
-            model=model,
-            dataset_cls=dataset_cls,
-            batch_size=batch_size,
-            epochs=epochs,
-            dataset_kwargs=ds_kwargs,
-            nsample=nsample,
-            verbose=False,
-            folder_name=folder,
-        )
-        tqdm.write(f"  ✓ done → {folder}")
+        try:
+            TrainAndEvaluate(
+                model=model,
+                dataset_cls=dataset_cls,
+                batch_size=batch_size,
+                epochs=epochs,
+                dataset_kwargs=ds_kwargs,
+                nsample=nsample,
+                verbose=False,
+                folder_name=folder,
+            )
+            tqdm.write(f"  ✓ done → {folder}")
+        finally:
+            # Release GPU memory before the next model, even on failure
+            del model
+            gc.collect()
+            torch.cuda.empty_cache()
+            time.sleep(2)  # let the driver finish releasing pages
 
 
 def _run_all(
