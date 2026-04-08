@@ -143,7 +143,7 @@ def Train(
     warmup_epochs: int = 10,
     warmup_start_factor: float = 0.1,  # initial lr = lr * warmup_start_factor
     grad_clip_norm: float | None = 0.3,
-    weight_decay: float = 1e-6,
+    weight_decay: float = 1e-4,
     use_ema: bool = False,
     ema_decay: float = 0.995,  # if use_ema=True
     ema_eval: bool = True,  # if use_ema=True
@@ -224,7 +224,7 @@ def Train(
                 )
 
         scheduler.step()
-        metrics["train_loss"].append((epoch_no + 1, epoch_loss))
+        metrics["train_loss"].append((epoch_no + 1, epoch_loss / batch_no))
 
         if (epoch_no + 1) % valid_epoch_interval == 0:
             model.eval()
@@ -250,7 +250,7 @@ def Train(
                             refresh=False,
                         )
 
-            metrics["test_loss"].append((epoch_no + 1, valid_loss))
+            metrics["test_loss"].append((epoch_no + 1, valid_loss / max(valid_batches, 1)))
 
             avg_valid_loss = valid_loss / max(valid_batches, 1)
             if best_valid_loss > avg_valid_loss:
