@@ -1,7 +1,10 @@
+import io
+import sys
 from dataclasses import dataclass
 from typing import Literal
 
 import torch
+from tqdm import tqdm
 
 from fits.dataframes.dataset import ForecastingData
 from fits.modelling.framework import ForecastedData, ForecastingModel, ModelConfig
@@ -20,8 +23,8 @@ class DiffusionTSConfig(ModelConfig):
     n_layer_enc: int = 2
     n_layer_dec: int = 2
     d_model: int = 64
-    timesteps: int = 500
-    sampling_timesteps: int = 500
+    timesteps: int = 200
+    sampling_timesteps: int = 200
     # fast_sampling = sampling_timesteps < timesteps; if True, leads to dramatic decrease in sampling quality (500&200 was worse than 200&200)
     loss_type: Literal["l1", "l2"] = "l1"
     beta_schedule: Literal["linear", "cosine"] = "cosine"
@@ -88,26 +91,31 @@ class DiffusionTSAdapter(ForecastingModel):
         }
 
         samples = []
-        for _ in range(n_samples):
-            if self.diffusion.fast_sampling:
-                generated = self.diffusion.fast_sample_infill(
-                    (batch_size, self.config.seq_len, self.config.feature_size),
-                    target=diffusion_batch,
-                    sampling_timesteps=self.diffusion.sampling_timesteps,
-                    partial_mask=partial_mask,
-                    model_kwargs=model_kwargs,
-                )
-            else:
-                generated = self.diffusion.sample_infill(
-                    shape=(
-                        batch_size,
-                        self.config.seq_len,
-                        self.config.feature_size,
-                    ),
-                    target=diffusion_batch,
-                    partial_mask=partial_mask,
-                    model_kwargs=model_kwargs,
-                )
+        for _ in tqdm(range(n_samples), desc="samples", leave=False):
+            _stdout = sys.stdout
+            sys.stdout = io.StringIO()
+            try:
+                if self.diffusion.fast_sampling:
+                    generated = self.diffusion.fast_sample_infill(
+                        (batch_size, self.config.seq_len, self.config.feature_size),
+                        target=diffusion_batch,
+                        sampling_timesteps=self.diffusion.sampling_timesteps,
+                        partial_mask=partial_mask,
+                        model_kwargs=model_kwargs,
+                    )
+                else:
+                    generated = self.diffusion.sample_infill(
+                        shape=(
+                            batch_size,
+                            self.config.seq_len,
+                            self.config.feature_size,
+                        ),
+                        target=diffusion_batch,
+                        partial_mask=partial_mask,
+                        model_kwargs=model_kwargs,
+                    )
+            finally:
+                sys.stdout = _stdout
 
             generated = generated.to(
                 diffusion_batch.device,
