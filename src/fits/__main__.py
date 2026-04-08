@@ -77,10 +77,10 @@ log = logging.getLogger(__name__)
 # Each entry: dataset_cls, feature_size, extra_kwargs, download_fn
 # ---------------------------------------------------------------------------
 DATASETS = {
-    "etth":        (DatasetETTh,        7,  {},               DownloadDatasetETTh),
-    "electricity": (DatasetElectricity, 32, {"n_features": 32}, DownloadDatasetElectricity),  # noqa: E501
-    "exchange":    (DatasetExchange,    8,  {},               DownloadDatasetExchange),
-    "weather":     (DatasetWeather,     21, {},               DownloadDatasetWeather),
+    "etth":        (DatasetETTh,        7,  {}                , 128 * 5, DownloadDatasetETTh),
+    "electricity": (DatasetElectricity, 24, {"n_features": 24}, 128 * 2, DownloadDatasetElectricity),  # noqa: E501
+    "exchange":    (DatasetExchange,    8,  {}                , 128 * 5, DownloadDatasetExchange),
+    "weather":     (DatasetWeather,     21, {}                , 128 * 2, DownloadDatasetWeather),
 }
 
 # ---------------------------------------------------------------------------
@@ -104,7 +104,7 @@ def _ensure_datasets() -> None:
     """Download any datasets whose files are not yet present."""
     from fits.dataframes.dataset import ModelMode  # noqa: PLC0415
 
-    for name, (dataset_cls, _, ds_kwargs, download_fn) in DATASETS.items():
+    for name, (dataset_cls, _, ds_kwargs, _, download_fn) in DATASETS.items():
         try:
             dataset_cls(mode=ModelMode.train, **ds_kwargs)
         except FileNotFoundError:
@@ -115,15 +115,15 @@ def _ensure_datasets() -> None:
 
 def _make_combos() -> list:
     return [
-        (dataset_name, dataset_cls, feature_size, ds_kwargs, model_name, factory)
-        for dataset_name, (dataset_cls, feature_size, ds_kwargs, _) in DATASETS.items()
+        (dataset_name, dataset_cls, feature_size, ds_kwargs, batch_size, model_name, factory)
+        for dataset_name, (dataset_cls, feature_size, ds_kwargs, batch_size, _) in DATASETS.items()
         for model_name, factory in MODEL_FACTORIES.items()
     ]
 
 
-def _run_combos(combos: list, first_differences: bool, epochs: int, batch_size: int, nsample: int) -> None:
+def _run_combos(combos: list, first_differences: bool, epochs: int, nsample: int) -> None:
     fd_suffix = "_fd" if first_differences else ""
-    for dataset_name, dataset_cls, feature_size, ds_kwargs, model_name, factory in tqdm(
+    for dataset_name, dataset_cls, feature_size, ds_kwargs, batch_size, model_name, factory in tqdm(
         combos, desc=f"runs (fd={first_differences})", unit="run"
     ):
         folder = f"{model_name}_{dataset_name}{fd_suffix}"
@@ -152,16 +152,15 @@ def _run_combos(combos: list, first_differences: bool, epochs: int, batch_size: 
 
 def _run_all(
     epochs: int = 200,
-    batch_size: int = 128 * 4,
     nsample: int = 10,
 ) -> None:
     _ensure_datasets()
 
     combos = _make_combos()
-    _run_combos(combos, first_differences=False, epochs=epochs, batch_size=batch_size, nsample=nsample)
+    _run_combos(combos, first_differences=False, epochs=epochs, nsample=nsample)
 
     combos_fd = _make_combos()
-    _run_combos(combos_fd, first_differences=True, epochs=epochs, batch_size=batch_size, nsample=nsample)
+    _run_combos(combos_fd, first_differences=True, epochs=epochs, nsample=nsample)
 
 
 if __name__ == "__main__":
