@@ -2,14 +2,20 @@ import math
 import pickle
 from collections.abc import Sequence
 from pathlib import Path
+from typing import Literal
 
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 import torch
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
 from sklearn.neighbors import KernelDensity
 from torch import nn
+
+from fits.config import EVALUATION_PATH, DatasetsPaths
+
+_KNOWN_DATASETS: frozenset[str] = frozenset(e.name for e in DatasetsPaths)
 
 
 def CalculateParams(model: nn.Module):
@@ -52,6 +58,74 @@ def ReadMetrics(
     print("CRPS_sum:", crps_sum)
 
     return {"rmse": rmse, "mae": mae, "crps": crps, "crps_sum": crps_sum}
+
+
+def ReadAllMetrics(
+    nsample: int = 10,
+    metric: Literal["rmse", "mae", "crps", "crps_sum"] = "crps",
+) -> pd.DataFrame:
+    """Scan all evaluation results and return a comparison table.
+
+    Folder naming convention: ``{model}_{dataset}`` and ``{model}_{dataset}_fd``.
+
+    Args:
+        nsample: Number of forecast samples used during evaluation
+                 (used to resolve the result pickle filename).
+        metric:  Which scalar metric to populate each cell with.
+
+    Returns:
+        DataFrame where rows are model names and columns form a 2-level
+        MultiIndex ``(fd, dataset)`` with ``fd`` values ``"no_fd"`` / ``"fd"``.
+        Missing combinations are ``NaN``.
+    """
+    records: dict[str, dict[tuple[str, str], float]] = {}
+
+    for folder in sorted(EVALUATION_PATH.iterdir()):
+        if not folder.is_dir():
+            continue
+
+        name = folder.name
+        is_fd = name.endswith("_fd")
+        base = name[:-3] if is_fd else name
+
+        dataset: str | None = None
+        model_name: str | None = None
+        for ds in _KNOWN_DATASETS:
+            if base.endswith(f"_{ds}"):
+                dataset = ds
+                model_name = base[: -(len(ds) + 1)]
+                break
+
+        if not dataset or not model_name:
+            continue
+
+        result_path = folder / f"result_nsample{nsample}.pk"
+        if not result_path.exists():
+            continue
+
+        with open(result_path, "rb") as f:
+            rmse, mae, crps, crps_sum = pickle.load(f)
+
+        value: float = {"rmse": rmse, "mae": mae, "crps": crps, "crps_sum": crps_sum}[
+            metric
+        ]
+        fd_label = "fd" if is_fd else "no_fd"
+        records.setdefault(model_name, {})[(fd_label, dataset)] = value
+
+    all_cols: set[tuple[str, str]] = set()
+    for col_map in records.values():
+        all_cols.update(col_map.keys())
+
+    col_index = pd.MultiIndex.from_tuples(
+        sorted(all_cols, key=lambda c: (0 if c[0] == "no_fd" else 1, c[1])),
+        names=["fd", "dataset"],
+    )
+    df = pd.DataFrame(index=sorted(records.keys()), columns=col_index, dtype=float)
+    for model, col_map in records.items():
+        for col, val in col_map.items():
+            df.loc[model, col] = val
+
+    return df
 
 
 def VisualizeForecastSample(
