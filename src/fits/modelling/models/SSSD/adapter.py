@@ -205,14 +205,15 @@ class SSSDAdapter(ForecastingModel):
         observed_mask = batch.observed_mask.to(device=self.device, dtype=torch.float32)
         forecast_mask = batch.forecast_mask.to(device=self.device, dtype=torch.float32)
 
+        cond_mask = observed_mask * (1.0 - forecast_mask)
+
         if self.config.first_differences:
             observed_data = self._first_differences(observed_data)
-            observed_mask = self._first_difference_mask(observed_mask)
-            forecast_mask = self._first_difference_mask(forecast_mask)
+            cond_mask = self._first_difference_mask(cond_mask)
 
         # SSSD expects [B, K, L]
         x = observed_data.permute(0, 2, 1)
-        cond_mask = (observed_mask * (1.0 - forecast_mask)).permute(0, 2, 1)
+        cond_mask = cond_mask.permute(0, 2, 1)
 
         return x, cond_mask
 

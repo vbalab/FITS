@@ -129,7 +129,9 @@ class DiffusionTSAdapter(ForecastingModel):
         stacked = torch.stack(samples, dim=1)
 
         if self.config.first_differences:
-            base = batch.observed_data.to(device=self.device, dtype=torch.float32)[:, :1]
+            base = batch.observed_data.to(device=self.device, dtype=torch.float32)[
+                :, :1
+            ]
             stacked = self._restore_levels(stacked, base)
 
         return ForecastedData(
@@ -149,12 +151,11 @@ class DiffusionTSAdapter(ForecastingModel):
 
         padding_mask = None
 
+        partial_mask = (observed_mask * (1 - forecast_mask)).bool()
+
         if self.config.first_differences:
             observed_data = self._first_differences(observed_data)
-            observed_mask = self._first_difference_mask(observed_mask)
-            forecast_mask = self._first_difference_mask(forecast_mask)
-
-        partial_mask = ((observed_mask * (1 - forecast_mask)).bool())
+            partial_mask = self._first_difference_mask(partial_mask.float()).bool()
         # 0 - to be generated
         # 1 - known at generation
 

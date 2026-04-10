@@ -239,15 +239,17 @@ class TimeGradAdapter(ForecastingModel):
         obs_mask = batch.observed_mask.to(device=self.device, dtype=torch.float32)
         fcst_mask = batch.forecast_mask.to(device=self.device, dtype=torch.float32)
 
+        # Compute context mask from original (un-differenced) masks so the
+        # 0→1 transition in forecast_mask is preserved correctly.
+        context_mask = obs_mask * (1.0 - fcst_mask)  # [B, L, K]
+
         if self.config.first_differences:
             x = self._first_differences(x)
             obs_mask = self._first_difference_mask(obs_mask)
-            fcst_mask = self._first_difference_mask(fcst_mask)
+            context_mask = self._first_difference_mask(context_mask)
 
         scale: torch.Tensor | None = None
         if self.config.scaling:
-            # Mean-abs scale computed on observed context positions only
-            context_mask = obs_mask * (1.0 - fcst_mask)  # [B, L, K]
             sum_abs = (x.abs() * context_mask).sum(dim=1, keepdim=True)
             count = context_mask.sum(dim=1, keepdim=True).clamp(min=1.0)
             scale = (sum_abs / count).clamp(min=1e-8)  # [B, 1, K]
