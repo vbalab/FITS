@@ -59,9 +59,6 @@ class SSSDConfig(ModelConfig):
     beta_start: float = 0.0001
     beta_end: float = 0.5
 
-    # --- Preprocessing -------------------------------------------------------
-    first_differences: bool = False
-
     def imputer_kwargs(self) -> dict:  # type: ignore[return]
         return {
             "in_channels": self.feature_size,
@@ -169,12 +166,6 @@ class SSSDAdapter(ForecastingModel):
 
         stacked = torch.stack(all_samples, dim=1)  # [B, n_samples, L, K]
 
-        if self.config.first_differences:
-            base = batch.observed_data.to(device=self.device, dtype=torch.float32)[
-                :, :1
-            ]
-            stacked = self._restore_levels(stacked, base)
-
         return ForecastedData(
             forecasted_data=stacked,
             observed_data=batch.observed_data.to(
@@ -189,6 +180,7 @@ class SSSDAdapter(ForecastingModel):
             time_points=batch.time_points[..., 0].to(
                 device=self.device, dtype=torch.float32
             ),
+            base_level=batch.base_level,
         )
 
     # ------------------------------------------------------------------
@@ -207,42 +199,8 @@ class SSSDAdapter(ForecastingModel):
 
         cond_mask = observed_mask * (1.0 - forecast_mask)
 
-        if self.config.first_differences:
-            observed_data = self._first_differences(observed_data)
-            cond_mask = self._first_difference_mask(cond_mask)
-
         # SSSD expects [B, K, L]
         x = observed_data.permute(0, 2, 1)
         cond_mask = cond_mask.permute(0, 2, 1)
 
         return x, cond_mask
-
-    # ------------------------------------------------------------------
-    # Helpers (mirror CSDI adapter pattern)
-    # ------------------------------------------------------------------
-
-    @staticmethod
-    def _first_differences(data: torch.Tensor) -> torch.Tensor:
-        diffs = torch.zeros_like(data)
-        diffs[:, 1:] = data[:, 1:] - data[:, :-1]
-        return diffs
-
-    @staticmethod
-    def _first_difference_mask(mask: torch.Tensor) -> torch.Tensor:
-        diff_mask = torch.zeros_like(mask)
-        diff_mask[:, 1:] = mask[:, 1:] * mask[:, :-1]
-        diff_mask[:, 0] = mask[:, 0]
-        return diff_mask
-
-    @staticmethod
-    def _restore_levels(
-        differences: torch.Tensor, base_levels: torch.Tensor
-    ) -> torch.Tensor:
-        """Cumulative sum back to level space.
-
-        Args:
-            differences: [B, n_samples, L, K]
-            base_levels: [B, 1, K]
-        """
-        base = base_levels.unsqueeze(1)  # [B, 1, 1, K]
-        return base + differences.cumsum(dim=2)

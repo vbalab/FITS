@@ -29,7 +29,6 @@ class CSDIConfig(ModelConfig):
     is_unconditional: bool = False
     target_strategy: Literal["mix", "random", "historical"] = "mix"
     num_sample_features: int = 64  # > feature_size -> no feature sampling
-    first_differences: bool = False
     diffusion: CSDIDiffusionConfig = field(default_factory=CSDIDiffusionConfig)
 
     def as_csdi_dict(self) -> dict:
@@ -79,12 +78,6 @@ class CSDIAdapter(ForecastingModel):
         obs = csdi_batch["observed_data"].unsqueeze(1)
         samples = torch.where(mask, obs, samples)
 
-        if self.config.first_differences:
-            base_levels = batch.observed_data.to(
-                device=self.device, dtype=torch.float32
-            )[:, :1]
-            samples = self._restore_levels(samples, base_levels)
-
         return ForecastedData(
             forecasted_data=samples,
             observed_data=batch.observed_data.to(
@@ -97,6 +90,7 @@ class CSDIAdapter(ForecastingModel):
                 device=self.device, dtype=torch.float32
             ),
             time_points=time_points,
+            base_level=batch.base_level,
         )
 
     def _adapt_batch(self, batch: ForecastingData) -> dict:
@@ -114,34 +108,9 @@ class CSDIAdapter(ForecastingModel):
         # 0 - to be generated
         # 1 - known at generation
 
-        if self.config.first_differences:
-            observed_data = self._first_differences(observed_data)
-            observed_mask = self._first_difference_mask(observed_mask)
-            gt_mask = self._first_difference_mask(gt_mask)
-
         return {
             "observed_data": observed_data,
             "observed_mask": observed_mask,
             "timepoints": time_points.to(dtype=torch.float32, device=self.device),
             "gt_mask": gt_mask,
         }
-
-    @staticmethod
-    def _first_differences(data: torch.Tensor) -> torch.Tensor:
-        diffs = torch.zeros_like(data)
-        diffs[:, 1:] = data[:, 1:] - data[:, :-1]
-        return diffs
-
-    @staticmethod
-    def _first_difference_mask(context_mask: torch.Tensor) -> torch.Tensor:
-        diff_mask = torch.zeros_like(context_mask)
-        diff_mask[:, 1:] = context_mask[:, 1:] * context_mask[:, :-1]
-        diff_mask[:, 0] = context_mask[:, 0]
-        return diff_mask
-
-    @staticmethod
-    def _restore_levels(
-        differences: torch.Tensor, base_levels: torch.Tensor
-    ) -> torch.Tensor:
-        base = base_levels.unsqueeze(1)
-        return base + differences.cumsum(dim=2)

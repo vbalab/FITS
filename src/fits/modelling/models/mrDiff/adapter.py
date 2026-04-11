@@ -52,9 +52,6 @@ class MrDiffConfig(ModelConfig):
     # --- Training ------------------------------------------------------------
     mixup_prob: float = 0.5  # future-mixup probability during training
 
-    # --- Preprocessing -------------------------------------------------------
-    first_differences: bool = False
-
 
 class MrDiffAdapter(ForecastingModel):
     """Adapter wrapping MrDiff into :class:`ForecastingModel`.
@@ -152,12 +149,6 @@ class MrDiffAdapter(ForecastingModel):
 
             pred = y_coarser_est  # Ŷ_0^0  [B, H, N]
 
-            if self.config.first_differences:
-                base = batch.observed_data.to(device=self.device, dtype=torch.float32)[
-                    :, -(self.config.pred_len + 1) : -(self.config.pred_len)
-                ]
-                pred = base + pred.cumsum(dim=1)
-
             ctx_len = self.config.seq_len - self.config.pred_len
             context = batch.observed_data.to(device=self.device, dtype=torch.float32)[
                 :, :ctx_len
@@ -181,6 +172,7 @@ class MrDiffAdapter(ForecastingModel):
             time_points=batch.time_points[..., 0].to(
                 device=self.device, dtype=torch.float32
             ),
+            base_level=batch.base_level,
         )
 
     # ------------------------------------------------------------------
@@ -191,14 +183,4 @@ class MrDiffAdapter(ForecastingModel):
         """Return (context, target) in [B, ctx/pred_len, N]."""
         pred_len = self.config.pred_len
         x_full = batch.observed_data.to(device=self.device, dtype=torch.float32)
-
-        if self.config.first_differences:
-            x_full = self._first_differences(x_full)
-
         return x_full[:, :-pred_len], x_full[:, -pred_len:]
-
-    @staticmethod
-    def _first_differences(data: torch.Tensor) -> torch.Tensor:
-        diffs = torch.zeros_like(data)
-        diffs[:, 1:] = data[:, 1:] - data[:, :-1]
-        return diffs

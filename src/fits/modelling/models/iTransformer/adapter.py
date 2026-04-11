@@ -53,9 +53,6 @@ class ITransformerConfig(ModelConfig):
     # --- Normalization -------------------------------------------------------
     use_norm: bool = True  # instance normalization inside the model
 
-    # --- Preprocessing -------------------------------------------------------
-    first_differences: bool = False
-
     def as_configs(self) -> SimpleNamespace:
         """Build the SimpleNamespace expected by iTransformer's Model.__init__."""
         return SimpleNamespace(
@@ -94,9 +91,7 @@ class ITransformerAdapter(ForecastingModel):
             - horizon region: model predictions (repeated)
 
     Normalization note: iTransformer applies its own instance normalization
-    internally when ``use_norm=True``. When ``first_differences=True``, the
-    adapter converts to differences first; iTransformer's norm then operates
-    in difference space, which is effectively stationary.
+    internally when ``use_norm=True``.
     """
 
     def __init__(self, config: ITransformerConfig = ITransformerConfig()) -> None:
@@ -121,14 +116,6 @@ class ITransformerAdapter(ForecastingModel):
     def evaluate(self, batch: ForecastingData, n_samples: int) -> ForecastedData:
         ctx, _ = self._adapt_batch(batch)
         pred = self._run_model(ctx)  # [B, pred_len, K]
-
-        if self.config.first_differences:
-            # Restore level space: base = last context value in original space
-            pred_len = self.config.pred_len
-            base = batch.observed_data.to(device=self.device, dtype=torch.float32)[
-                :, -(pred_len + 1) : -(pred_len)
-            ]  # [B, 1, K]
-            pred = base + pred.cumsum(dim=1)
 
         # Build full sequence: observed context + predicted horizon
         ctx_len = self.config.seq_len - self.config.pred_len
@@ -156,6 +143,7 @@ class ITransformerAdapter(ForecastingModel):
             time_points=batch.time_points[..., 0].to(
                 device=self.device, dtype=torch.float32
             ),
+            base_level=batch.base_level,
         )
 
     # ------------------------------------------------------------------
@@ -174,23 +162,11 @@ class ITransformerAdapter(ForecastingModel):
     def _adapt_batch(self, batch: ForecastingData) -> tuple[torch.Tensor, torch.Tensor]:
         """Return (context, target) in [B, ctx_len/pred_len, K].
 
-        If ``first_differences=True``, both context and target are
-        converted to differences so the MSE loss stays in difference space.
-        iTransformer's internal ``use_norm`` then handles remaining
-        instance normalization.
+        iTransformer's internal ``use_norm`` handles instance normalization.
         """
         pred_len = self.config.pred_len
         x = batch.observed_data.to(device=self.device, dtype=torch.float32)
 
-        if self.config.first_differences:
-            x = self._first_differences(x)
-
         ctx = x[:, :-pred_len]  # [B, ctx_len, K]
         target = x[:, -pred_len:]  # [B, pred_len, K]
         return ctx, target
-
-    @staticmethod
-    def _first_differences(data: torch.Tensor) -> torch.Tensor:
-        diffs = torch.zeros_like(data)
-        diffs[:, 1:] = data[:, 1:] - data[:, :-1]
-        return diffs

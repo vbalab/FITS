@@ -80,9 +80,6 @@ class NsDiffConfig(ModelConfig):
     sigma_hidden_size: int = 64
     rolling_length: int = 96  # trailing window for sigma estimation
 
-    # --- Preprocessing -------------------------------------------------------
-    first_differences: bool = False
-
     def mu_backbone_configs(self) -> SimpleNamespace:
         """Build the configs namespace expected by mu_backbone.Model."""
         ctx_len = self.seq_len - self.pred_len
@@ -293,12 +290,6 @@ class NsDiffAdapter(ForecastingModel):
             )
             pred = y_p_seq[-1]  # [B, pred, K] — final denoised prediction
 
-            if self.config.first_differences:
-                base = batch.observed_data.to(device=self.device, dtype=torch.float32)[
-                    :, -(self.config.pred_len + 1) : -(self.config.pred_len)
-                ]
-                pred = base + pred.cumsum(dim=1)
-
             # Build full sequence: observed context + predicted horizon
             ctx = batch.observed_data.to(device=self.device, dtype=torch.float32)[
                 :, : self._ctx_len
@@ -322,6 +313,7 @@ class NsDiffAdapter(ForecastingModel):
             time_points=batch.time_points[..., 0].to(
                 device=self.device, dtype=torch.float32
             ),
+            base_level=batch.base_level,
         )
 
     # ------------------------------------------------------------------
@@ -332,14 +324,4 @@ class NsDiffAdapter(ForecastingModel):
         """Return (context, target) in [B, ctx/pred_len, K]."""
         pred_len = self.config.pred_len
         x = batch.observed_data.to(device=self.device, dtype=torch.float32)
-
-        if self.config.first_differences:
-            x = self._first_differences(x)
-
         return x[:, :-pred_len], x[:, -pred_len:]
-
-    @staticmethod
-    def _first_differences(data: torch.Tensor) -> torch.Tensor:
-        diffs = torch.zeros_like(data)
-        diffs[:, 1:] = data[:, 1:] - data[:, :-1]
-        return diffs
