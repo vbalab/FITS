@@ -15,12 +15,17 @@ def _collate_forecasting_data(batch: list[ForecastingData]) -> ForecastingData:
     time_points = torch.stack([sample.time_points for sample in batch], dim=0)
     feature_ids = torch.stack([sample.feature_ids for sample in batch], dim=0)
 
+    base_level: torch.Tensor | None = None
+    if batch[0].base_level is not None:
+        base_level = torch.stack([sample.base_level for sample in batch], dim=0)  # type: ignore[misc]
+
     return ForecastingData(
         observed_data=observed_data,
         observed_mask=observed_mask,
         forecast_mask=forecast_mask,
         time_points=time_points,
         feature_ids=feature_ids,
+        base_level=base_level,
     )
 
 

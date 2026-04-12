@@ -34,6 +34,9 @@ class ForecastedData:
     # 0 - not observed
     # 1 - observed (ground truth)
     time_points: torch.Tensor  # [B, L] float
+    base_level: torch.Tensor | None = (
+        None  # [B, K] — raw first value (first-differences only)
+    )
 
 
 @dataclass
@@ -77,9 +80,7 @@ class EMA:
     """Exponential Moving Average of model parameters."""
 
     decay: float = 0.999
-    device: torch.device | None = (
-        None  # e.g. torch.device("cpu") to store EMA on CPU
-    )
+    device: torch.device | None = None  # e.g. torch.device("cpu") to store EMA on CPU
 
     def __post_init__(self):
         self.shadow = {}
@@ -251,7 +252,9 @@ def Train(
                             refresh=False,
                         )
 
-            metrics["test_loss"].append((epoch_no + 1, valid_loss / max(valid_batches, 1)))
+            metrics["test_loss"].append(
+                (epoch_no + 1, valid_loss / max(valid_batches, 1))
+            )
 
             avg_valid_loss = valid_loss / max(valid_batches, 1)
             if best_valid_loss > avg_valid_loss:
@@ -366,6 +369,18 @@ def Evaluate(
         scale_tensor == 0, torch.ones_like(scale_tensor), scale_tensor
     )
 
+    # When the dataset used first_differences, center/scale refer to
+    # difference-space normalisation.  Keep a copy for reconstruction,
+    # then switch the metric tensors to identity so that MSE/MAE/CRPS
+    # are computed directly in raw-level space.
+    first_differences = getattr(test_loader.dataset, "first_differences", False)
+    if first_differences:
+        diff_center = center_tensor.clone()
+        diff_scale = scale_tensor.clone()
+        # Metrics will operate in raw space after reconstruction.
+        scale_tensor = torch.ones_like(scale_tensor)
+        center_tensor = torch.zeros_like(center_tensor)
+
     all_forecasted_data: list[torch.Tensor] = []
     all_forecast_mask: list[torch.Tensor] = []
     all_observed_data: list[torch.Tensor] = []
@@ -375,6 +390,24 @@ def Evaluate(
     with tqdm(test_loader, mininterval=5.0, maxinterval=50.0) as it:
         for batch_no, test_batch in enumerate(it, start=1):
             f: ForecastedData = model.evaluate(test_batch, nsample)
+
+            if first_differences and f.base_level is not None:
+                # De-normalise from difference space to raw differences …
+                raw_diffs_pred = f.forecasted_data * diff_scale + diff_center
+                raw_diffs_obs = f.observed_data * diff_scale + diff_center
+                base = f.base_level.to(
+                    device=raw_diffs_pred.device, dtype=raw_diffs_pred.dtype
+                )
+                # … then integrate and anchor to the raw base level.
+                f = ForecastedData(
+                    forecasted_data=base.unsqueeze(1).unsqueeze(1)
+                    + raw_diffs_pred.cumsum(dim=2),
+                    observed_data=base.unsqueeze(1) + raw_diffs_obs.cumsum(dim=1),
+                    forecast_mask=f.forecast_mask,
+                    observed_mask=f.observed_mask,
+                    time_points=f.time_points,
+                    base_level=f.base_level,
+                )
 
             all_forecasted_data.append(f.forecasted_data)
             all_forecast_mask.append(f.forecast_mask)

@@ -57,9 +57,6 @@ class PatchTSTConfig(ModelConfig):
     subtract_last: bool = False  # RevIN: subtract last value instead of mean
     res_attention: bool = True  # residual attention across layers
 
-    # --- Preprocessing -------------------------------------------------------
-    first_differences: bool = False
-
     def backbone_kwargs(self) -> dict:  # type: ignore[return]
         ctx_len = self.seq_len - self.pred_len
         return {
@@ -129,14 +126,6 @@ class PatchTSTAdapter(ForecastingModel):
         ctx, _ = self._adapt_batch(batch)
         pred = self._run_model(ctx)  # [B, pred_len, K]
 
-        if self.config.first_differences:
-            # Restore level space: base = last context value in original space
-            pred_len = self.config.pred_len
-            base = batch.observed_data.to(device=self.device, dtype=torch.float32)[
-                :, -(pred_len + 1) : -(pred_len)
-            ]  # [B, 1, K]
-            pred = base + pred.cumsum(dim=1)
-
         # Build full sequence: observed context + predicted horizon
         ctx_len = self.config.seq_len - self.config.pred_len
         context = batch.observed_data.to(device=self.device, dtype=torch.float32)[
@@ -163,6 +152,7 @@ class PatchTSTAdapter(ForecastingModel):
             time_points=batch.time_points[..., 0].to(
                 device=self.device, dtype=torch.float32
             ),
+            base_level=batch.base_level,
         )
 
     # ------------------------------------------------------------------
@@ -177,25 +167,13 @@ class PatchTSTAdapter(ForecastingModel):
         return out.permute(0, 2, 1)  # [B, pred_len, K]
 
     def _adapt_batch(self, batch: ForecastingData) -> tuple[torch.Tensor, torch.Tensor]:
-        """Return (context, target) both in [B, pred_len-or-ctx_len, K].
+        """Return (context, target) in [B, ctx_len/pred_len, K].
 
-        If ``first_differences`` is enabled the context passed to the model
-        is differenced; the target is differenced too so the MSE loss stays
-        in difference space. RevIN inside PatchTST_backbone handles any
-        remaining instance normalization.
+        RevIN inside PatchTST_backbone handles instance normalization.
         """
         pred_len = self.config.pred_len
         x = batch.observed_data.to(device=self.device, dtype=torch.float32)
 
-        if self.config.first_differences:
-            x = self._first_differences(x)
-
         ctx = x[:, :-pred_len]  # [B, ctx_len, K]
         target = x[:, -pred_len:]  # [B, pred_len, K]
         return ctx, target
-
-    @staticmethod
-    def _first_differences(data: torch.Tensor) -> torch.Tensor:
-        diffs = torch.zeros_like(data)
-        diffs[:, 1:] = data[:, 1:] - data[:, :-1]
-        return diffs

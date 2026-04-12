@@ -25,7 +25,6 @@ class FITSConfig(ModelConfig):
     padding_size: int | None = None
     lognormal_hucfg_t_sampling: bool = True  # otherwise, uniform
     hucfg_num_steps: int = 500
-    first_differences: bool = True
     conditional: bool = (
         True  # use observed history values for conditioning during training/sampling
     )
@@ -91,8 +90,6 @@ class FITSModel(ForecastingModel):
             samples.append(generated)
 
         stacked = torch.stack(samples, dim=1)
-        if self.config.first_differences:
-            stacked = self._restore_levels(stacked, base_levels)
 
         return ForecastedData(
             forecasted_data=stacked,
@@ -100,6 +97,7 @@ class FITSModel(ForecastingModel):
             observed_data=batch.observed_data.to(self.device, dtype=torch.float32),
             observed_mask=batch.observed_mask.to(self.device, dtype=torch.float32),
             time_points=batch.time_points[..., 0].to(self.device, dtype=torch.float32),
+            base_level=batch.base_level,
         )
 
     def _output(self, x: torch.Tensor, t: torch.Tensor):
@@ -168,11 +166,7 @@ class FITSModel(ForecastingModel):
 
             z1 = zt.clone() + (1 - t) * v
 
-            if self.config.first_differences:
-                z1 = torch.clamp(z1, min=-2, max=2)
-                # in first differences [-1, 1] -> [-2, 2]=[(-1) - (1), 1 - (-1)]
-            else:
-                z1 = torch.clamp(z1, min=-1, max=1)
+            z1 = torch.clamp(z1, min=-1, max=1)
 
         return z1
 
@@ -187,30 +181,4 @@ class FITSModel(ForecastingModel):
         forecast_mask = batch.forecast_mask.to(device=self.device, dtype=torch.float32)
         base_levels = observed_data[:, :1]
 
-        if not self.config.first_differences:
-            return observed_data, partial_mask, base_levels, forecast_mask
-
-        diff_data = self._first_differences(observed_data)
-        diff_partial_mask = self._first_difference_mask(partial_mask)
-
-        return diff_data, diff_partial_mask, base_levels, forecast_mask
-
-    @staticmethod
-    def _first_differences(data: torch.Tensor) -> torch.Tensor:
-        diffs = torch.zeros_like(data)
-        diffs[:, 1:] = data[:, 1:] - data[:, :-1]
-        return diffs
-
-    @staticmethod
-    def _first_difference_mask(context_mask: torch.Tensor) -> torch.Tensor:
-        diff_mask = torch.zeros_like(context_mask)
-        diff_mask[:, 1:] = context_mask[:, 1:] & context_mask[:, :-1]
-        diff_mask[:, 0] = context_mask[:, 0]
-        return diff_mask
-
-    @staticmethod
-    def _restore_levels(
-        differences: torch.Tensor, base_levels: torch.Tensor
-    ) -> torch.Tensor:
-        base = base_levels.unsqueeze(1)
-        return base + differences.cumsum(dim=2)
+        return observed_data, partial_mask, base_levels, forecast_mask

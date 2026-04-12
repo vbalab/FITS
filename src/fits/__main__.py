@@ -4,7 +4,6 @@ Usage:
     python -m fits
 """
 
-
 # import os
 
 # GPUs = [
@@ -80,10 +79,16 @@ log = logging.getLogger(__name__)
 # Each entry: dataset_cls, feature_size, extra_kwargs, download_fn
 # ---------------------------------------------------------------------------
 DATASETS = {
-    "etth":        (DatasetETTh,        7,  {}                , 128 * 5, DownloadDatasetETTh),
-    "electricity": (DatasetElectricity, 24, {"n_features": 24}, 128 * 2, DownloadDatasetElectricity),  # noqa: E501
-    "exchange":    (DatasetExchange,    8,  {}                , 128 * 5, DownloadDatasetExchange),
-    "weather":     (DatasetWeather,     21, {}                , 128 * 2, DownloadDatasetWeather),
+    "etth": (DatasetETTh, 7, {}, 128 * 5, DownloadDatasetETTh),
+    "electricity": (
+        DatasetElectricity,
+        24,
+        {"n_features": 24},
+        128 * 2,
+        DownloadDatasetElectricity,
+    ),  # noqa: E501
+    "exchange": (DatasetExchange, 8, {}, 128 * 5, DownloadDatasetExchange),
+    "weather": (DatasetWeather, 21, {}, 128 * 2, DownloadDatasetWeather),
 }
 
 # ---------------------------------------------------------------------------
@@ -91,15 +96,15 @@ DATASETS = {
 # a fresh model instance.
 # ---------------------------------------------------------------------------
 MODEL_FACTORIES = {
-    "csdi":          lambda k, fd: CSDIAdapter(CSDIConfig(feature_size=k, first_differences=fd)),
-    "diffusion_ts":  lambda k, fd: DiffusionTSAdapter(DiffusionTSConfig(feature_size=k, first_differences=fd)),
-    "timegrad":      lambda k, fd: TimeGradAdapter(TimeGradConfig(feature_size=k, first_differences=fd)),
-    "patchtst":      lambda k, fd: PatchTSTAdapter(PatchTSTConfig(feature_size=k, first_differences=fd)),
-    "itransformer":  lambda k, fd: ITransformerAdapter(ITransformerConfig(feature_size=k, first_differences=fd)),
-    "sssd":          lambda k, fd: SSSDAdapter(SSSDConfig(feature_size=k, first_differences=fd)),
-    "mrdiff":        lambda k, fd: MrDiffAdapter(MrDiffConfig(feature_size=k, first_differences=fd)),
-    "nsdiff":        lambda k, fd: NsDiffAdapter(NsDiffConfig(feature_size=k, first_differences=fd)),
-    "falda":         lambda k, fd: FALDAAdapter(FALDAConfig(feature_size=k, first_differences=fd)),
+    "csdi": lambda k: CSDIAdapter(CSDIConfig(feature_size=k)),
+    "diffusion_ts": lambda k: DiffusionTSAdapter(DiffusionTSConfig(feature_size=k)),
+    "timegrad": lambda k: TimeGradAdapter(TimeGradConfig(feature_size=k)),
+    "patchtst": lambda k: PatchTSTAdapter(PatchTSTConfig(feature_size=k)),
+    "itransformer": lambda k: ITransformerAdapter(ITransformerConfig(feature_size=k)),
+    "sssd": lambda k: SSSDAdapter(SSSDConfig(feature_size=k)),
+    "mrdiff": lambda k: MrDiffAdapter(MrDiffConfig(feature_size=k)),
+    "nsdiff": lambda k: NsDiffAdapter(NsDiffConfig(feature_size=k)),
+    "falda": lambda k: FALDAAdapter(FALDAConfig(feature_size=k)),
 }
 
 
@@ -118,28 +123,53 @@ def _ensure_datasets() -> None:
 
 def _make_combos() -> list:
     return [
-        (dataset_name, dataset_cls, feature_size, ds_kwargs, batch_size, model_name, factory)
-        for dataset_name, (dataset_cls, feature_size, ds_kwargs, batch_size, _) in DATASETS.items()
+        (
+            dataset_name,
+            dataset_cls,
+            feature_size,
+            ds_kwargs,
+            batch_size,
+            model_name,
+            factory,
+        )
+        for dataset_name, (
+            dataset_cls,
+            feature_size,
+            ds_kwargs,
+            batch_size,
+            _,
+        ) in DATASETS.items()
         for model_name, factory in MODEL_FACTORIES.items()
     ]
 
 
-def _run_combos(combos: list, first_differences: bool, epochs: int, nsample: int) -> None:
+def _run_combos(
+    combos: list, first_differences: bool, epochs: int, nsample: int
+) -> None:
     fd_suffix = "_fd" if first_differences else ""
-    for dataset_name, dataset_cls, feature_size, ds_kwargs, batch_size, model_name, factory in tqdm(
-        combos, desc=f"runs (fd={first_differences})", unit="run"
-    ):
+    for (
+        dataset_name,
+        dataset_cls,
+        feature_size,
+        ds_kwargs,
+        batch_size,
+        model_name,
+        factory,
+    ) in tqdm(combos, desc=f"runs (fd={first_differences})", unit="run"):
         folder = f"{model_name}_{dataset_name}{fd_suffix}"
-        tqdm.write(f"▶ {model_name} on {dataset_name} (first_differences={first_differences})")
+        tqdm.write(
+            f"▶ {model_name} on {dataset_name} (first_differences={first_differences})"
+        )
 
-        model = factory(feature_size, first_differences)
+        model = factory(feature_size)
+        run_ds_kwargs = {**ds_kwargs, "first_differences": first_differences}
         try:
             TrainAndEvaluate(
                 model=model,
                 dataset_cls=dataset_cls,
                 batch_size=batch_size,
                 epochs=epochs,
-                dataset_kwargs=ds_kwargs,
+                dataset_kwargs=run_ds_kwargs,
                 nsample=nsample,
                 verbose=False,
                 folder_name=folder,

@@ -39,7 +39,6 @@ class DiffusionTSConfig(ModelConfig):
     # train_loss + fourier_loss --- to encourage the model to reproduce similar spectral content (amplitudes/phases across frequencies), which can improve seasonality and smoothness
     reg_weight: float | None = None
     langevin_coef: float = 1e-2
-    first_differences: bool = False
     # langevin_coef = 0.0   -> Replace-only conditional sampling
     # langevin_coef > 0     -> Replace + Guided conditional sampling
     langevin_learning_rate: float = 5e-2
@@ -128,16 +127,13 @@ class DiffusionTSAdapter(ForecastingModel):
 
         stacked = torch.stack(samples, dim=1)
 
-        if self.config.first_differences:
-            base = batch.observed_data.to(device=self.device, dtype=torch.float32)[:, :1]
-            stacked = self._restore_levels(stacked, base)
-
         return ForecastedData(
             forecasted_data=stacked,
             forecast_mask=batch.forecast_mask.to(self.device, dtype=torch.float32),
             observed_data=batch.observed_data.to(self.device, dtype=torch.float32),
             observed_mask=batch.observed_mask.to(self.device, dtype=torch.float32),
             time_points=batch.time_points[..., 0].to(self.device, dtype=torch.float32),
+            base_level=batch.base_level,
         )
 
     def _adapt_batch(
@@ -149,33 +145,8 @@ class DiffusionTSAdapter(ForecastingModel):
 
         padding_mask = None
 
-        if self.config.first_differences:
-            observed_data = self._first_differences(observed_data)
-            observed_mask = self._first_difference_mask(observed_mask)
-            forecast_mask = self._first_difference_mask(forecast_mask)
-
-        partial_mask = ((observed_mask * (1 - forecast_mask)).bool())
+        partial_mask = (observed_mask * (1 - forecast_mask)).bool()
         # 0 - to be generated
         # 1 - known at generation
 
         return observed_data, padding_mask, partial_mask
-
-    @staticmethod
-    def _first_differences(data: torch.Tensor) -> torch.Tensor:
-        diffs = torch.zeros_like(data)
-        diffs[:, 1:] = data[:, 1:] - data[:, :-1]
-        return diffs
-
-    @staticmethod
-    def _first_difference_mask(mask: torch.Tensor) -> torch.Tensor:
-        diff_mask = torch.zeros_like(mask)
-        diff_mask[:, 1:] = mask[:, 1:] * mask[:, :-1]
-        diff_mask[:, 0] = mask[:, 0]
-        return diff_mask
-
-    @staticmethod
-    def _restore_levels(
-        differences: torch.Tensor, base_levels: torch.Tensor
-    ) -> torch.Tensor:
-        base = base_levels.unsqueeze(1)  # [B, 1, 1, K]
-        return base + differences.cumsum(dim=2)

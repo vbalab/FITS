@@ -57,7 +57,6 @@ class TimeGradConfig(ModelConfig):
 
     # --- Preprocessing ------------------------------------------------------
     scaling: bool = True
-    first_differences: bool = False
 
     def epsilon_theta_kwargs(self) -> dict:  # type: ignore[return]
         return {
@@ -131,7 +130,7 @@ class TimeGradAdapter(ForecastingModel):
 
     def forward(self, batch: ForecastingData) -> torch.Tensor:
         x, _, _, scale = self._adapt_batch(batch)
-        # x: [B, L, K] in our scaled (+ optionally differenced) space
+        # x: [B, L, K] in our scaled space
 
         # Teacher-forced RNN over the full window
         rnn_out, _ = self.rnn(x)  # [B, L, num_cells]
@@ -200,13 +199,6 @@ class TimeGradAdapter(ForecastingModel):
         if scale is not None:
             stacked = stacked * scale.unsqueeze(1)  # broadcast over n_samples
 
-        # Undo first differences → back to level space
-        if self.config.first_differences:
-            base = batch.observed_data.to(device=self.device, dtype=torch.float32)[
-                :, :1
-            ]
-            stacked = self._restore_levels(stacked, base)
-
         return ForecastedData(
             forecasted_data=stacked,
             observed_data=batch.observed_data.to(
@@ -221,6 +213,7 @@ class TimeGradAdapter(ForecastingModel):
             time_points=batch.time_points[..., 0].to(
                 device=self.device, dtype=torch.float32
             ),
+            base_level=batch.base_level,
         )
 
     # ------------------------------------------------------------------
@@ -232,22 +225,18 @@ class TimeGradAdapter(ForecastingModel):
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor | None]:
         """Return (x, observed_mask, forecast_mask, scale).
 
-        Applies first-differencing and mean-abs scaling in that order so
-        both are reversible cleanly in :meth:`evaluate`.
+        Applies mean-abs scaling so it is reversible in :meth:`evaluate`.
         """
         x = batch.observed_data.to(device=self.device, dtype=torch.float32)
         obs_mask = batch.observed_mask.to(device=self.device, dtype=torch.float32)
         fcst_mask = batch.forecast_mask.to(device=self.device, dtype=torch.float32)
 
-        if self.config.first_differences:
-            x = self._first_differences(x)
-            obs_mask = self._first_difference_mask(obs_mask)
-            fcst_mask = self._first_difference_mask(fcst_mask)
+        # Compute context mask from original (un-differenced) masks so the
+        # 0→1 transition in forecast_mask is preserved correctly.
+        context_mask = obs_mask * (1.0 - fcst_mask)  # [B, L, K]
 
         scale: torch.Tensor | None = None
         if self.config.scaling:
-            # Mean-abs scale computed on observed context positions only
-            context_mask = obs_mask * (1.0 - fcst_mask)  # [B, L, K]
             sum_abs = (x.abs() * context_mask).sum(dim=1, keepdim=True)
             count = context_mask.sum(dim=1, keepdim=True).clamp(min=1.0)
             scale = (sum_abs / count).clamp(min=1e-8)  # [B, 1, K]
@@ -274,29 +263,3 @@ class TimeGradAdapter(ForecastingModel):
         # GRU: state = h_n: [num_layers, B, num_cells]
         assert isinstance(state, torch.Tensor)
         return state[-1]
-
-    @staticmethod
-    def _first_differences(data: torch.Tensor) -> torch.Tensor:
-        diffs = torch.zeros_like(data)
-        diffs[:, 1:] = data[:, 1:] - data[:, :-1]
-        return diffs
-
-    @staticmethod
-    def _first_difference_mask(mask: torch.Tensor) -> torch.Tensor:
-        diff_mask = torch.zeros_like(mask)
-        diff_mask[:, 1:] = mask[:, 1:] * mask[:, :-1]
-        diff_mask[:, 0] = mask[:, 0]
-        return diff_mask
-
-    @staticmethod
-    def _restore_levels(
-        differences: torch.Tensor, base_levels: torch.Tensor
-    ) -> torch.Tensor:
-        """Cumulative sum back to level space.
-
-        Args:
-            differences: [B, n_samples, L, K]
-            base_levels: [B, 1, K]  (first time step in level space)
-        """
-        base = base_levels.unsqueeze(1)  # [B, 1, 1, K]
-        return base + differences.cumsum(dim=2)

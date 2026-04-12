@@ -54,9 +54,6 @@ class FALDAConfig(ModelConfig):
     pretrain_epochs: int = 5  # δ — epochs before DEMA training starts
     alt_interval: int = 5  # Δ — how often to alternate fine-tune vs DEMA
 
-    # --- Preprocessing -------------------------------------------------------
-    first_differences: bool = False
-
 
 class FALDAAdapter(ForecastingModel):
     """Adapter wrapping FALDA into :class:`ForecastingModel`.
@@ -203,12 +200,6 @@ class FALDAAdapter(ForecastingModel):
             )
             pred = y_non_hat + y_stat_hat + r_hat  # Ŷ = Ŷ_non + Ŷ_stat + R̂
 
-            if self.config.first_differences:
-                base = batch.observed_data.to(device=self.device, dtype=torch.float32)[
-                    :, -(self.config.pred_len + 1) : -(self.config.pred_len)
-                ]
-                pred = base + pred.cumsum(dim=1)
-
             ctx_len = self.config.seq_len - self.config.pred_len
             context = batch.observed_data.to(device=self.device, dtype=torch.float32)[
                 :, :ctx_len
@@ -232,6 +223,7 @@ class FALDAAdapter(ForecastingModel):
             time_points=batch.time_points[..., 0].to(
                 device=self.device, dtype=torch.float32
             ),
+            base_level=batch.base_level,
         )
 
     # ------------------------------------------------------------------
@@ -241,12 +233,4 @@ class FALDAAdapter(ForecastingModel):
     def _adapt_batch(self, batch: ForecastingData) -> tuple[torch.Tensor, torch.Tensor]:
         pred_len = self.config.pred_len
         x = batch.observed_data.to(device=self.device, dtype=torch.float32)
-        if self.config.first_differences:
-            x = self._first_differences(x)
         return x[:, :-pred_len], x[:, -pred_len:]
-
-    @staticmethod
-    def _first_differences(data: torch.Tensor) -> torch.Tensor:
-        diffs = torch.zeros_like(data)
-        diffs[:, 1:] = data[:, 1:] - data[:, :-1]
-        return diffs

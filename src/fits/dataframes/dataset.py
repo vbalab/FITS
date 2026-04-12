@@ -27,6 +27,9 @@ class ForecastingData:
     # 1 - horizon to forecast (to be generated)
     time_points: torch.Tensor  # [L, K] float
     feature_ids: torch.Tensor  # [L, K] float
+    base_level: torch.Tensor | None = (
+        None  # [K] float — raw first value (first-differences only)
+    )
 
 
 @dataclass
@@ -52,6 +55,7 @@ class ForecastingDataset(Dataset[ForecastingData], ABC):
         dim: int,  # K
         train_share: float = 0.75,
         validation_share: float = 0.1,
+        first_differences: bool = False,
     ) -> None:
         assert horizon < seq_len, f"Horizon={horizon} >= seq_len={seq_len}"
         assert train_share + validation_share <= 1, "Incorrect train/validation shares"
@@ -62,12 +66,36 @@ class ForecastingDataset(Dataset[ForecastingData], ABC):
         self.dim = dim
         self.train_share = train_share
         self.validation_share = validation_share
+        self.first_differences = first_differences
 
     @abstractmethod
     def __getitem__(self, index: int) -> ForecastingData: ...
 
     @abstractmethod
     def __len__(self) -> int: ...
+
+    @staticmethod
+    def _apply_first_differences(
+        values: np.ndarray, mask: np.ndarray
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """Compute first differences and adjust the observation mask.
+
+        Returns ``(diff_values, diff_mask)`` where::
+
+            diff_values[0]  = 0
+            diff_values[t]  = values[t] - values[t-1]   for t >= 1
+
+            diff_mask[0]    = mask[0]
+            diff_mask[t]    = mask[t] & mask[t-1]        for t >= 1
+        """
+        diff_values = np.zeros_like(values)
+        diff_values[1:] = values[1:] - values[:-1]
+
+        diff_mask = np.zeros_like(mask)
+        diff_mask[0] = mask[0]
+        diff_mask[1:] = mask[1:] * mask[:-1]
+
+        return diff_values, diff_mask
 
 
 class DatasetSolar(ForecastingDataset):
@@ -81,6 +109,7 @@ class DatasetSolar(ForecastingDataset):
         normalization: bool = True,
         normalization_stats: NormalizationStats | None = None,
         n_features: int = 128,  # max=137, but default=128 features to match published setups
+        first_differences: bool = False,
     ) -> None:
         dataset_path = DatasetsPaths.solar.value
 
@@ -107,6 +136,7 @@ class DatasetSolar(ForecastingDataset):
             dim=dim,
             train_share=train_share,
             validation_share=validation_share,
+            first_differences=first_differences,
         )
 
         self.data = torch.from_numpy(values)
@@ -142,9 +172,12 @@ class DatasetSolar(ForecastingDataset):
         )
 
         if normalization_stats is None and normalization:
+            norm_values, norm_mask = values, mask
+            if first_differences:
+                norm_values, norm_mask = self._apply_first_differences(values, mask)
             normalization_stats = self._compute_training_normalization(
-                values=values,
-                mask=mask,
+                values=norm_values,
+                mask=norm_mask,
                 train_sequences=train_end,
                 seq_len=self.seq_len,
             )
@@ -155,12 +188,24 @@ class DatasetSolar(ForecastingDataset):
         start_idx = self.start + index
         end_idx = start_idx + self.seq_len
 
+        observed_data = self.data[start_idx:end_idx]
         observed_mask = self.mask[start_idx:end_idx]
 
         forecast_mask = torch.zeros_like(observed_mask)
         forecast_mask[-self.horizon :] = observed_mask[-self.horizon :]
 
-        observed_data = self.data[start_idx:end_idx]
+        base_level: torch.Tensor | None = None
+        if self.first_differences:
+            base_level = observed_data[0].clone()
+            diffs = torch.zeros_like(observed_data)
+            diffs[1:] = observed_data[1:] - observed_data[:-1]
+            observed_data = diffs
+
+            diff_mask = torch.zeros_like(observed_mask)
+            diff_mask[0] = observed_mask[0]
+            diff_mask[1:] = observed_mask[1:] * observed_mask[:-1]
+            observed_mask = diff_mask
+
         observed_data = self._normalize(observed_data)
 
         return ForecastingData(
@@ -169,6 +214,7 @@ class DatasetSolar(ForecastingDataset):
             forecast_mask=forecast_mask,
             time_points=self.time_points,
             feature_ids=self.feature_ids,
+            base_level=base_level,
         )
 
     def __len__(self) -> int:
@@ -228,6 +274,7 @@ class DatasetETTh(ForecastingDataset):
         validation_share: float = 0.1,
         normalization: bool = True,
         normalization_stats: NormalizationStats | None = None,
+        first_differences: bool = False,
     ) -> None:
         dataset_path = DatasetsPaths.etth.value
 
@@ -252,6 +299,7 @@ class DatasetETTh(ForecastingDataset):
             dim=dim,
             train_share=train_share,
             validation_share=validation_share,
+            first_differences=first_differences,
         )
 
         self.data = torch.from_numpy(values)
@@ -287,9 +335,12 @@ class DatasetETTh(ForecastingDataset):
         )
 
         if normalization_stats is None and normalization:
+            norm_values, norm_mask = values, mask
+            if first_differences:
+                norm_values, norm_mask = self._apply_first_differences(values, mask)
             normalization_stats = self._compute_training_normalization(
-                values=values,
-                mask=mask,
+                values=norm_values,
+                mask=norm_mask,
                 train_sequences=train_end,
                 seq_len=self.seq_len,
             )
@@ -300,12 +351,24 @@ class DatasetETTh(ForecastingDataset):
         start_idx = self.start + index
         end_idx = start_idx + self.seq_len
 
+        observed_data = self.data[start_idx:end_idx]
         observed_mask = self.mask[start_idx:end_idx]
 
         forecast_mask = torch.zeros_like(observed_mask)
         forecast_mask[-self.horizon :] = observed_mask[-self.horizon :]
 
-        observed_data = self.data[start_idx:end_idx]
+        base_level: torch.Tensor | None = None
+        if self.first_differences:
+            base_level = observed_data[0].clone()
+            diffs = torch.zeros_like(observed_data)
+            diffs[1:] = observed_data[1:] - observed_data[:-1]
+            observed_data = diffs
+
+            diff_mask = torch.zeros_like(observed_mask)
+            diff_mask[0] = observed_mask[0]
+            diff_mask[1:] = observed_mask[1:] * observed_mask[:-1]
+            observed_mask = diff_mask
+
         observed_data = self._normalize(observed_data)
 
         return ForecastingData(
@@ -314,6 +377,7 @@ class DatasetETTh(ForecastingDataset):
             forecast_mask=forecast_mask,
             time_points=self.time_points,
             feature_ids=self.feature_ids,
+            base_level=base_level,
         )
 
     def __len__(self) -> int:
@@ -374,6 +438,7 @@ class DatasetElectricity(ForecastingDataset):
         normalization: bool = True,
         normalization_stats: NormalizationStats | None = None,
         n_features: int = 321,  # max=321; use fewer for faster experiments
+        first_differences: bool = False,
     ) -> None:
         dataset_path = DatasetsPaths.electricity.value
 
@@ -401,6 +466,7 @@ class DatasetElectricity(ForecastingDataset):
             dim=dim,
             train_share=train_share,
             validation_share=validation_share,
+            first_differences=first_differences,
         )
 
         self.data = torch.from_numpy(values)
@@ -436,9 +502,12 @@ class DatasetElectricity(ForecastingDataset):
         )
 
         if normalization_stats is None and normalization:
+            norm_values, norm_mask = values, mask
+            if first_differences:
+                norm_values, norm_mask = self._apply_first_differences(values, mask)
             normalization_stats = self._compute_training_normalization(
-                values=values,
-                mask=mask,
+                values=norm_values,
+                mask=norm_mask,
                 train_sequences=train_end,
                 seq_len=self.seq_len,
             )
@@ -449,12 +518,24 @@ class DatasetElectricity(ForecastingDataset):
         start_idx = self.start + index
         end_idx = start_idx + self.seq_len
 
+        observed_data = self.data[start_idx:end_idx]
         observed_mask = self.mask[start_idx:end_idx]
 
         forecast_mask = torch.zeros_like(observed_mask)
         forecast_mask[-self.horizon :] = observed_mask[-self.horizon :]
 
-        observed_data = self.data[start_idx:end_idx]
+        base_level: torch.Tensor | None = None
+        if self.first_differences:
+            base_level = observed_data[0].clone()
+            diffs = torch.zeros_like(observed_data)
+            diffs[1:] = observed_data[1:] - observed_data[:-1]
+            observed_data = diffs
+
+            diff_mask = torch.zeros_like(observed_mask)
+            diff_mask[0] = observed_mask[0]
+            diff_mask[1:] = observed_mask[1:] * observed_mask[:-1]
+            observed_mask = diff_mask
+
         observed_data = self._normalize(observed_data)
 
         return ForecastingData(
@@ -463,6 +544,7 @@ class DatasetElectricity(ForecastingDataset):
             forecast_mask=forecast_mask,
             time_points=self.time_points,
             feature_ids=self.feature_ids,
+            base_level=base_level,
         )
 
     def __len__(self) -> int:
@@ -523,6 +605,7 @@ class DatasetExchange(ForecastingDataset):
         normalization: bool = True,
         normalization_stats: NormalizationStats | None = None,
         n_features: int = 8,  # max=8
+        first_differences: bool = False,
     ) -> None:
         dataset_path = DatasetsPaths.exchange.value
 
@@ -550,6 +633,7 @@ class DatasetExchange(ForecastingDataset):
             dim=dim,
             train_share=train_share,
             validation_share=validation_share,
+            first_differences=first_differences,
         )
 
         self.data = torch.from_numpy(values)
@@ -585,9 +669,12 @@ class DatasetExchange(ForecastingDataset):
         )
 
         if normalization_stats is None and normalization:
+            norm_values, norm_mask = values, mask
+            if first_differences:
+                norm_values, norm_mask = self._apply_first_differences(values, mask)
             normalization_stats = self._compute_training_normalization(
-                values=values,
-                mask=mask,
+                values=norm_values,
+                mask=norm_mask,
                 train_sequences=train_end,
                 seq_len=self.seq_len,
             )
@@ -598,12 +685,24 @@ class DatasetExchange(ForecastingDataset):
         start_idx = self.start + index
         end_idx = start_idx + self.seq_len
 
+        observed_data = self.data[start_idx:end_idx]
         observed_mask = self.mask[start_idx:end_idx]
 
         forecast_mask = torch.zeros_like(observed_mask)
         forecast_mask[-self.horizon :] = observed_mask[-self.horizon :]
 
-        observed_data = self.data[start_idx:end_idx]
+        base_level: torch.Tensor | None = None
+        if self.first_differences:
+            base_level = observed_data[0].clone()
+            diffs = torch.zeros_like(observed_data)
+            diffs[1:] = observed_data[1:] - observed_data[:-1]
+            observed_data = diffs
+
+            diff_mask = torch.zeros_like(observed_mask)
+            diff_mask[0] = observed_mask[0]
+            diff_mask[1:] = observed_mask[1:] * observed_mask[:-1]
+            observed_mask = diff_mask
+
         observed_data = self._normalize(observed_data)
 
         return ForecastingData(
@@ -612,6 +711,7 @@ class DatasetExchange(ForecastingDataset):
             forecast_mask=forecast_mask,
             time_points=self.time_points,
             feature_ids=self.feature_ids,
+            base_level=base_level,
         )
 
     def __len__(self) -> int:
@@ -672,6 +772,7 @@ class DatasetWeather(ForecastingDataset):
         normalization: bool = True,
         normalization_stats: NormalizationStats | None = None,
         n_features: int = 21,  # max=21
+        first_differences: bool = False,
     ) -> None:
         dataset_path = DatasetsPaths.weather.value
 
@@ -684,8 +785,8 @@ class DatasetWeather(ForecastingDataset):
         df = pd.read_csv(dataset_path, parse_dates=["date"])
         df = df.sort_values("date")
 
-        values = df.drop(columns=["date"]).iloc[:, :n_features].to_numpy(
-            dtype=np.float32
+        values = (
+            df.drop(columns=["date"]).iloc[:, :n_features].to_numpy(dtype=np.float32)
         )
         mask = ~np.isnan(values)
         np.nan_to_num(values, nan=0.0, copy=False)
@@ -699,6 +800,7 @@ class DatasetWeather(ForecastingDataset):
             dim=dim,
             train_share=train_share,
             validation_share=validation_share,
+            first_differences=first_differences,
         )
 
         self.data = torch.from_numpy(values)
@@ -734,9 +836,12 @@ class DatasetWeather(ForecastingDataset):
         )
 
         if normalization_stats is None and normalization:
+            norm_values, norm_mask = values, mask
+            if first_differences:
+                norm_values, norm_mask = self._apply_first_differences(values, mask)
             normalization_stats = self._compute_training_normalization(
-                values=values,
-                mask=mask,
+                values=norm_values,
+                mask=norm_mask,
                 train_sequences=train_end,
                 seq_len=self.seq_len,
             )
@@ -747,12 +852,24 @@ class DatasetWeather(ForecastingDataset):
         start_idx = self.start + index
         end_idx = start_idx + self.seq_len
 
+        observed_data = self.data[start_idx:end_idx]
         observed_mask = self.mask[start_idx:end_idx]
 
         forecast_mask = torch.zeros_like(observed_mask)
         forecast_mask[-self.horizon :] = observed_mask[-self.horizon :]
 
-        observed_data = self.data[start_idx:end_idx]
+        base_level: torch.Tensor | None = None
+        if self.first_differences:
+            base_level = observed_data[0].clone()
+            diffs = torch.zeros_like(observed_data)
+            diffs[1:] = observed_data[1:] - observed_data[:-1]
+            observed_data = diffs
+
+            diff_mask = torch.zeros_like(observed_mask)
+            diff_mask[0] = observed_mask[0]
+            diff_mask[1:] = observed_mask[1:] * observed_mask[:-1]
+            observed_mask = diff_mask
+
         observed_data = self._normalize(observed_data)
 
         return ForecastingData(
@@ -761,6 +878,7 @@ class DatasetWeather(ForecastingDataset):
             forecast_mask=forecast_mask,
             time_points=self.time_points,
             feature_ids=self.feature_ids,
+            base_level=base_level,
         )
 
     def __len__(self) -> int:
