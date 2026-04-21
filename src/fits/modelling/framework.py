@@ -398,6 +398,15 @@ def Evaluate(
                 base = f.base_level.to(
                     device=raw_diffs_pred.device, dtype=raw_diffs_pred.dtype
                 )
+                # Anchor the cumsum at the start of the horizon: keep observed
+                # diffs in the context so context-prediction errors don't leak
+                # into the reconstructed raw-level forecast.
+                horizon = f.forecast_mask.unsqueeze(1).bool()
+                raw_diffs_pred = torch.where(
+                    horizon,
+                    raw_diffs_pred,
+                    raw_diffs_obs.unsqueeze(1).expand_as(raw_diffs_pred),
+                )
                 # … then integrate and anchor to the raw base level.
                 f = ForecastedData(
                     forecasted_data=base.unsqueeze(1).unsqueeze(1)
