@@ -519,6 +519,7 @@ def TrainAndEvaluate(
     nsample: int = 10,
     # --- shared ---
     folder_name: str | None = None,
+    eval_only: bool = False,
 ) -> None:
     """Train a model, load the best checkpoint, then evaluate on the test set.
 
@@ -537,6 +538,8 @@ def TrainAndEvaluate(
                              dataset constructor (e.g. ``seq_len``, ``horizon``).
         folder_name:         Optional name for checkpoint / results folders.
                              Auto-generated from model name + timestamp if omitted.
+        eval_only:           If True, skip training and evaluate an existing
+                             checkpoint at ``TRAINING_PATH / folder_name / best_model.pth``.
         All remaining args:  Forwarded verbatim to :func:`Train` / :func:`Evaluate`.
     """
     if dataset_kwargs is None:
@@ -554,28 +557,34 @@ def TrainAndEvaluate(
         **dataset_kwargs,
     )
 
-    # Train — saves best_model.pth under TRAINING_PATH / folder_name
-    Train(
-        model=model,
-        train_loader=train_loader,
-        valid_loader=valid_loader,
-        lr=lr,
-        epochs=epochs,
-        valid_epoch_interval=valid_epoch_interval,
-        verbose=verbose,
-        warmup_epochs=warmup_epochs,
-        warmup_start_factor=warmup_start_factor,
-        grad_clip_norm=grad_clip_norm,
-        weight_decay=weight_decay,
-        use_ema=use_ema,
-        ema_decay=ema_decay,
-        ema_eval=ema_eval,
-        ema_save=ema_save,
-        folder_name=folder_name,
-    )
+    if not eval_only:
+        # Train — saves best_model.pth under TRAINING_PATH / folder_name
+        Train(
+            model=model,
+            train_loader=train_loader,
+            valid_loader=valid_loader,
+            lr=lr,
+            epochs=epochs,
+            valid_epoch_interval=valid_epoch_interval,
+            verbose=verbose,
+            warmup_epochs=warmup_epochs,
+            warmup_start_factor=warmup_start_factor,
+            grad_clip_norm=grad_clip_norm,
+            weight_decay=weight_decay,
+            use_ema=use_ema,
+            ema_decay=ema_decay,
+            ema_eval=ema_eval,
+            ema_save=ema_save,
+            folder_name=folder_name,
+        )
 
-    # Load the best checkpoint saved by Train()
+    # Load the best checkpoint (saved by Train() in the normal flow, or
+    # produced by a previous run when ``eval_only`` is set).
     best_ckpt = TRAINING_PATH / folder_name / "best_model.pth"
+    if eval_only and not best_ckpt.is_file():
+        raise FileNotFoundError(
+            f"eval_only=True but no checkpoint was found at {best_ckpt}"
+        )
     model.load_state_dict(torch.load(best_ckpt, map_location=model.device))
 
     # Evaluate on test set using normalization stats from the training split
