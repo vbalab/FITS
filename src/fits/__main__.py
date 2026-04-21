@@ -1,7 +1,8 @@
 """Train and evaluate all models on all datasets.
 
 Usage:
-    python -m fits
+    python -m fits                # train + evaluate
+    python -m fits --eval-only    # evaluate already-trained checkpoints only
 """
 
 # import os
@@ -20,6 +21,7 @@ Usage:
 
 # -----
 
+import argparse
 import gc
 import logging
 import time
@@ -144,7 +146,11 @@ def _make_combos() -> list:
 
 
 def _run_combos(
-    combos: list, first_differences: bool, epochs: int, nsample: int
+    combos: list,
+    first_differences: bool,
+    epochs: int,
+    nsample: int,
+    eval_only: bool = False,
 ) -> None:
     fd_suffix = "_fd" if first_differences else ""
     for (
@@ -157,8 +163,10 @@ def _run_combos(
         factory,
     ) in tqdm(combos, desc=f"runs (fd={first_differences})", unit="run"):
         folder = f"{model_name}_{dataset_name}{fd_suffix}"
+        mode = "eval-only" if eval_only else "train+eval"
         tqdm.write(
-            f"▶ {model_name} on {dataset_name} (first_differences={first_differences})"
+            f"▶ {model_name} on {dataset_name} "
+            f"(first_differences={first_differences}, mode={mode})"
         )
 
         model = factory(feature_size)
@@ -173,8 +181,11 @@ def _run_combos(
                 nsample=nsample,
                 verbose=False,
                 folder_name=folder,
+                eval_only=eval_only,
             )
             tqdm.write(f"  ✓ done → {folder}")
+        except FileNotFoundError as e:
+            tqdm.write(f"  ✗ skipped {folder}: {e}")
         finally:
             # Release GPU memory before the next model, even on failure
             del model
@@ -186,15 +197,61 @@ def _run_combos(
 def _run_all(
     epochs: int = 200,
     nsample: int = 10,
+    eval_only: bool = False,
 ) -> None:
     _ensure_datasets()
 
     combos = _make_combos()
-    _run_combos(combos, first_differences=False, epochs=epochs, nsample=nsample)
+    _run_combos(
+        combos,
+        first_differences=False,
+        epochs=epochs,
+        nsample=nsample,
+        eval_only=eval_only,
+    )
 
     combos_fd = _make_combos()
-    _run_combos(combos_fd, first_differences=True, epochs=epochs, nsample=nsample)
+    _run_combos(
+        combos_fd,
+        first_differences=True,
+        epochs=epochs,
+        nsample=nsample,
+        eval_only=eval_only,
+    )
+
+
+def _parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        prog="python -m fits",
+        description="Train and evaluate all models on all datasets.",
+    )
+    parser.add_argument(
+        "--eval-only",
+        action="store_true",
+        help=(
+            "Skip training and only evaluate models whose checkpoints already "
+            "exist under data/models/training/<folder>/best_model.pth."
+        ),
+    )
+    parser.add_argument(
+        "--epochs",
+        type=int,
+        default=200,
+        help="Number of training epochs (ignored when --eval-only is set).",
+    )
+    parser.add_argument(
+        "--nsample",
+        type=int,
+        default=10,
+        help="Number of Monte-Carlo forecast samples drawn during evaluation.",
+    )
+    return parser.parse_args()
 
 
 if __name__ == "__main__":
-    _run_all()
+    args = _parse_args()
+    _run_all(
+        epochs=args.epochs,
+        nsample=args.nsample,
+        eval_only=args.eval_only,
+    )
