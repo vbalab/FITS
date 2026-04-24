@@ -139,25 +139,15 @@ def VisualizeForecastSample(
     """
     Plot a separate subplot for each feature in feature_index.
     """
-    evaluation_dir = Path(f"../data/models/evaluation/{eval_foldername}")
-    generated_path = evaluation_dir / f"generated_outputs_nsample{nsample}.pk"
-
-    with open(generated_path, "rb") as f:
-        (
-            forecasted_data,
-            forecast_mask,
-            observed_data,
-            observed_mask,
-            time_points,
-            scaler_tensor,
-            mean_tensor,
-        ) = pickle.load(f)
-
-    forecasted_data = forecasted_data.cpu()
-    forecast_mask = forecast_mask.cpu()
-    observed_data = observed_data.cpu()
-    observed_mask = observed_mask.cpu()
-    time_points = time_points.cpu()
+    (
+        forecasted_data,
+        forecast_mask,
+        observed_data,
+        observed_mask,
+        time_points,
+        _,
+        _,
+    ) = _load_generated_outputs(eval_foldername, nsample)
 
     time_axis = time_points[sample_index].numpy()
 
@@ -241,14 +231,22 @@ def _load_generated_outputs(
             mean_tensor,
         ) = pickle.load(f)
 
+    # Denormalize to raw data space so _fd and non-_fd pickles are comparable.
+    # _fd runs already store raw values with scale=1/center=0 (identity); non-_fd
+    # runs store min-max normalized values and rely on the saved affine here.
+    scaler_tensor = scaler_tensor.cpu()
+    mean_tensor = mean_tensor.cpu()
+    forecasted_data = forecasted_data.cpu() * scaler_tensor + mean_tensor
+    observed_data = observed_data.cpu() * scaler_tensor + mean_tensor
+
     return (
-        forecasted_data.cpu(),
+        forecasted_data,
         forecast_mask.cpu(),
-        observed_data.cpu(),
+        observed_data,
         observed_mask.cpu(),
         time_points.cpu(),
-        scaler_tensor.cpu(),
-        mean_tensor.cpu(),
+        scaler_tensor,
+        mean_tensor,
     )
 
 
@@ -588,8 +586,8 @@ def _plot_data_density(
         observed_density = _kde_curve(observed_np, grid, bandwidth)
     forecast_density = _kde_curve(forecast_np, grid, bandwidth)
 
-    ax.plot(grid, observed_density, label="Original", color="tab:red")
-    ax.plot(grid, forecast_density, label="Generated", color="tab:blue", linestyle="--")
+    ax.plot(grid, observed_density, label="Original", color="#70FB9F")
+    ax.plot(grid, forecast_density, label="Generated", color="#F972A4", linestyle="--")
     ax.set_xlabel("Data Value")
     ax.set_ylabel("Data Density Estimate")
     ax.grid(True)
@@ -604,8 +602,14 @@ def _plot_pca(
     obs_embed = pca.transform(observed_vectors)
     gen_embed = pca.transform(forecast_vectors)
 
-    ax.scatter(obs_embed[:, 0], obs_embed[:, 1], s=10, alpha=0.6, label="Original")
-    ax.scatter(gen_embed[:, 0], gen_embed[:, 1], s=10, alpha=0.6, label="Generated")
+    ax.scatter(
+        obs_embed[:, 0], obs_embed[:, 1], s=10, alpha=0.6, color="#70FB9F",
+        label="Original",
+    )
+    ax.scatter(
+        gen_embed[:, 0], gen_embed[:, 1], s=10, alpha=0.6, color="#F972A4",
+        label="Generated",
+    )
     ax.set_xlabel("PC1")
     ax.set_ylabel("PC2")
     ax.grid(True)
@@ -616,8 +620,14 @@ def _plot_tsne(
     obs_embed: np.ndarray,
     gen_embed: np.ndarray,
 ) -> None:
-    ax.scatter(obs_embed[:, 0], obs_embed[:, 1], s=10, alpha=0.6, label="Original")
-    ax.scatter(gen_embed[:, 0], gen_embed[:, 1], s=10, alpha=0.6, label="Generated")
+    ax.scatter(
+        obs_embed[:, 0], obs_embed[:, 1], s=10, alpha=0.6, color="#70FB9F",
+        label="Original",
+    )
+    ax.scatter(
+        gen_embed[:, 0], gen_embed[:, 1], s=10, alpha=0.6, color="#F972A4",
+        label="Generated",
+    )
     ax.grid(True)
 
 
